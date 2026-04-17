@@ -1,0 +1,146 @@
+{
+  "nav": {
+    "features": "Features",
+    "howItWorks": "How It Works",
+    "testimonials": "Testimonials",
+    "cta": "Get Started"
+  },
+  "hero": {
+    "badge": "Inclusive health technology",
+    "title": "I also speak",
+    "titleHighlight": "your language",
+    "description": "SignBridge connects deaf patients with our healthcare professionals at Moscati Hospital through intuitive technology, ensuring clear, empathetic, and barrier-free medical care.",
+    "feature1": "Real-time sign language translation",
+    "feature2": "Bidirectional patient-doctor communication",
+    "feature3": "AI assistant for medical consultations",
+    "cta": "Get Started",
+    "ctaSecondary": "Watch Demo",
+    "socialProof": "Over {count}+ healthcare professionals trust SignBridge"
+  },
+  "preview": {
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "patients": "Patients",
+      "translator": "Translator",
+      "history": "History",
+      "settings": "Settings"
+    },
+    "welcome": "Welcome, Dr. {name}",
+    "summary": "Today's activity summary",
+    "stats": {
+      "patients": "Active Patients",
+      "translations": "Translations Today",
+      "satisfaction": "Satisfaction"
+    }
+  },
+  "features": {
+    "badge": "Features",
+    "title": "Everything you need for barrier-free communication",
+    "description": "SignBridge offers advanced tools to facilitate communication between healthcare professionals and deaf patients.",
+    "signDetection": {
+      "title": "Sign Detection",
+      "description": "Real-time sign language recognition using artificial intelligence and computer vision."
+    },
+    "textToSpeech": {
+      "title": "Text to Speech",
+      "description": "Converts translated text into natural voice so the patient can hear the professional."
+    },
+    "aiAssistant": {
+      "title": "AI Assistant",
+      "description": "An intelligent assistant that helps interpret medical context and suggests appropriate responses."
+    },
+    "progressTracking": {
+      "title": "Progress Tracking",
+      "description": "Monitor consultation history and improve communication with each interaction."
+    },
+    "bidirectional": {
+      "title": "Bidirectional Communication",
+      "description": "Enables communication in both directions: from doctor to patient and from patient to doctor."
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Detailed statistics on usage, translations performed, and service quality metrics."
+    }
+  },
+  "bento": {
+    "badge": "Complete Experience",
+    "heading": "Designed for the hospital environment",
+    "mobile": {
+      "title": "Mobile Access",
+      "description": "Use SignBridge from any device, including tablets in medical offices.",
+      "comingSoon": "Mobile App Coming Soon"
+    },
+    "vocabulary": {
+      "title": "Medical Vocabulary",
+      "description": "Specialized library of medical signs for accurate consultations.",
+      "examples": ["Diagnosis", "Medication", "Symptoms", "Treatment", "Emergency", "Appointment"]
+    },
+    "progress": {
+      "title": "Consultation History",
+      "description": "Complete record of all translations and consultations performed."
+    },
+    "assistant": {
+      "title": "SignBridge Assistant",
+      "description": "Contextual AI that understands medical terminology and facilitates communication.",
+      "aiLabel": "SignBridge AI",
+      "youLabel": "You",
+      "youSample": "How do I explain the diagnosis to the patient?",
+      "aiSample": "I suggest using simple signs for 'diagnosis'. I can help you translate the results step by step."
+    }
+  },
+  "testimonials": {
+    "badge": "Testimonials",
+    "title": "What our users say",
+    "items": [
+      {
+        "quote": "SignBridge has transformed the way I care for my deaf patients. Communication is now fluid and empathetic.",
+        "name": "Dr. María González",
+        "role": "General Practitioner - Moscati Hospital",
+        "initials": "MG",
+        "avatar": 1
+      },
+      {
+        "quote": "For the first time I felt truly understood in a medical consultation. This tool changes lives.",
+        "name": "Ana Torres",
+        "role": "Patient",
+        "initials": "AT",
+        "avatar": 2
+      },
+      {
+        "quote": "The accuracy of sign detection is impressive. It greatly facilitates our daily work.",
+        "name": "Dr. Carlos Ruiz",
+        "role": "Specialist - Moscati Hospital",
+        "initials": "CR",
+        "avatar": 3
+      },
+      {
+        "quote": "A necessary solution that should be in every hospital. Technology at the service of inclusion.",
+        "name": "Laura Méndez",
+        "role": "Inclusion Director",
+        "initials": "LM",
+        "avatar": 4
+      }
+    ]
+  },
+  "cta": {
+    "title": "Barrier-free communication starts here",
+    "description": "Join the healthcare professionals who are already transforming medical care for deaf patients with SignBridge.",
+    "button": "Start Free"
+  },
+  "footer": {
+    "description": "Inclusive technology to connect healthcare professionals with deaf patients.",
+    "product": "Product",
+    "links": {
+      "features": "Features",
+      "pricing": "Pricing",
+      "demo": "Demo"
+    },
+    "company": "Project",
+    "companyLinks": {
+      "about": "About Us",
+      "contact": "Contact",
+      "blog": "Blog"
+    },
+    "rights": "All rights reserved."
+  }
+}
