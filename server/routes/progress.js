@@ -10,6 +10,7 @@
 
 import express  from 'express'
 import mongoose from 'mongoose'
+import UserProgress from '../models/UserProgress.js'
 
 const router = express.Router()
 
@@ -26,26 +27,35 @@ async function ensureConnection() {
   }
 }
 
-// ── Schema ────────────────────────────────────────────────────────────────────
-const SignProgressSchema = new mongoose.Schema({
-  letter:       { type: String, required: true },
-  attempts:     { type: Number, default: 0 },
-  bestScore:    { type: Number, default: 0 },
-  mastered:     { type: Boolean, default: false },  // score >= 85
-  lastPractice: { type: Date, default: Date.now }
+// ── GET /api/progress/leaderboard ─────────────────────────────────────────────
+router.get('/leaderboard', async (req, res) => {
+  await ensureConnection()
+  try {
+    const leaderboard = await UserProgress.aggregate([
+      { $match: { streak: { $gt: 0 } } },
+      {
+        $project: {
+          userId: 1,
+          streak: 1,
+          masteredCount: {
+            $size: {
+              $filter: {
+                input: '$signs',
+                as: 'sign',
+                cond: { $eq: ['$$sign.mastered', true] }
+              }
+            }
+          }
+        }
+      },
+      { $sort: { streak: -1, masteredCount: -1 } },
+      { $limit: 10 }
+    ])
+    res.json(leaderboard)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
-
-const UserProgressSchema = new mongoose.Schema({
-  userId:       { type: String, required: true, unique: true },
-  signs:        [SignProgressSchema],
-  streak:       { type: Number, default: 0 },        // días consecutivos
-  lastActive:   { type: Date, default: Date.now },
-  voiceId:      { type: String, default: '21m00Tcm4TlvDq8ikWAM' }
-}, { timestamps: true })
-
-// Evitar re-compilar el modelo si ya existe (hot reload en desarrollo)
-const UserProgress = mongoose.models.UserProgress
-  || mongoose.model('UserProgress', UserProgressSchema)
 
 // ── GET /api/progress/:userId ─────────────────────────────────────────────────
 router.get('/:userId', async (req, res) => {
