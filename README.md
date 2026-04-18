@@ -58,25 +58,28 @@ la persona oyente habla → el texto aparece en pantalla para que el sordo lea.
 
 ```
 SignBridge/
-├── client/                    # PWA (React + Vite)
-│   └── src/
-│       ├── modules/
-│       │   ├── translator/    # Módulo principal: traductor en tiempo real
-│       │   ├── practice/      # Módulo de práctica con Gemini (H 8–14)
-│       │   └── landing/       # Landing page
-│       ├── hooks/
-│       │   ├── useHandDetection.js    # Wrapper de MediaPipe
-│       │   └── useSpeechRecognition.js
-│       └── App.jsx
-│
-├── server/                    # API (Node.js + Express)
-│   └── routes/
-│       ├── elevenlabs.js      # Proxy TTS (API key segura)
-│       ├── gemini.js          # Análisis de práctica
-│       └── progress.js        # CRUD MongoDB
-│
-├── .env.example               # Variables de entorno necesarias
-└── package.json               # Monorepo workspaces
+├── apps/
+│   ├── web/                   # PWA (React + Vite)
+│   │   └── src/
+│   │       ├── modules/
+│   │       │   ├── translator/
+│   │       │   ├── training/
+│   │       │   ├── practice/
+│   │       │   └── landing/
+│   │       ├── hooks/
+│   │       └── utils/
+│   └── api/                   # API (Node.js + Express)
+│       └── routes/
+│           ├── elevenlabs.js
+│           ├── gemini.js
+│           ├── progress.js
+│           └── training.js
+├── packages/
+│   └── sign-engine/           # Motor compartido de landmarks, reglas y decoding
+├── archive/
+│   └── pwa-experiments/       # Línea experimental previa, fuera del flujo principal
+├── .env.example
+└── package.json
 ```
 
 ---
@@ -92,8 +95,8 @@ npm run install:all
 
 ### 2. Configurar variables de entorno
 ```bash
-cp .env.example server/.env
-# Editar server/.env con tus API keys:
+cp .env.example .env
+# Editar .env con tus API keys:
 #   ELEVENLABS_API_KEY=...
 #   GEMINI_API_KEY=...
 #   MONGODB_URI=...         (de MongoDB Atlas → Connect → Drivers)
@@ -102,8 +105,8 @@ cp .env.example server/.env
 ### 3. Arrancar en desarrollo
 ```bash
 npm run dev
-# Cliente: http://localhost:5173
-# Servidor: http://localhost:3001
+# Web: http://localhost:5173
+# API: http://localhost:3001
 ```
 
 ---

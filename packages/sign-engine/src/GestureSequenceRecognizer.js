@@ -1,5 +1,5 @@
 import { DYNAMIC_GESTURE_MAP } from './SignMap.js'
-import { classifyDTW } from '../training/KNNClassifier.js'
+import { classifyDTW } from './KNNClassifier.js'
 import { normalizeHand } from './HandNormalizer.js'
 
 const LM = {

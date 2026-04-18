@@ -6,8 +6,8 @@
  */
 
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { classifySign, createSmoother } from '@signbridge/sign-engine'
 import { useHandDetection } from '../../hooks/useHandDetection.js'
-import { classifySign, createSmoother } from './SignClassifier.js'
 
 // Conexiones entre landmarks para dibujar el esqueleto de la mano
 const HAND_CONNECTIONS = [

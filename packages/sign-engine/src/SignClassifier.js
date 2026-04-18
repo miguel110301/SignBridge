@@ -1,6 +1,6 @@
 import { extractHandFeatures } from './HandFeatureExtractor.js'
 import { classifyStaticLSM } from './StaticLSMClassifier.js'
-import { classifyKNN } from '../training/KNNClassifier.js'
+import { classifyKNN } from './KNNClassifier.js'
 
 const HAND_QUALITY_EDGE_MARGIN = 0.04
 const SMOOTHER_MIN_RATIO = 0.7

@@ -1,5 +1,5 @@
 /**
- * server/index.js
+ * apps/api/index.js
  * Servidor Express para SignBridge.
  *
  * Responsabilidades:
@@ -9,6 +9,7 @@
  */
 
 import path from 'node:path'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 
@@ -22,12 +23,13 @@ import trainingRoute from './routes/training.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const webDistDir = path.resolve(__dirname, '../web/dist')
 
 // Soporta ambos escenarios:
-// 1. `server/.env` cuando el backend tiene su propio archivo
-// 2. `../.env` cuando el monorepo comparte variables desde la raiz
+// 1. `apps/api/.env` cuando el backend tiene su propio archivo
+// 2. `../../.env` cuando el monorepo comparte variables desde la raiz
 dotenv.config({ path: path.resolve(__dirname, '.env') })
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false })
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: false })
 
 const app  = express()
 const PORT = process.env.PORT || 3001
@@ -60,20 +62,19 @@ if (process.env.MONGODB_URI) {
   console.log('   MongoDB:        ✗ FALTA (URI no definida)')
 }
 
-// ── Arrancar ──────────────────────────────────────────────────────────────────
-const path = require('path');
+// ── Frontend compilado ────────────────────────────────────────────────────────
+if (existsSync(webDistDir)) {
+  app.use(express.static(webDistDir))
 
-// Asegúrate de que las rutas de tu API estén antes de esto.
-// Por ejemplo: app.use('/api', apiRoutes);
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path === '/health') {
+      next()
+      return
+    }
 
-// 1. Servir los archivos estáticos de React
-// (Cambia 'dist' por 'build' si usas Create React App en lugar de Vite)
-app.use(express.static(path.join(__dirname, '../client/dist')));
-
-// 2. Para cualquier otra ruta que no sea de la API, devolver la aplicación de React
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-});
+    res.sendFile(path.join(webDistDir, 'index.html'))
+  })
+}
 
 app.listen(PORT, () => {
   console.log(`\n🟢 SignBridge server corriendo en http://localhost:${PORT}`)

@@ -1,5 +1,5 @@
 {
-  "name": "signbridge-client",
+  "name": "@signbridge/web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@signbridge/sign-engine": "file:../../packages/sign-engine",
     "@mediapipe/tasks-vision": "^0.10.14",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

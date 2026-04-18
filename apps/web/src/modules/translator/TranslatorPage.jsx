@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useHandDetection } from '../../hooks/useHandDetection.js'
 import {
   assessHandDetectionQuality,
+  createGestureSequenceRecognizer,
   createSmoother,
   debugFingers,
+  decodeFingerSpelling,
   extractHandMetrics,
-} from './SignClassifier.js'
-import { SIGN_LANGUAGE_PROFILE } from './SignMap.js'
-import { decodeFingerSpelling } from './SpellingDecoder.js'
-import { createGestureSequenceRecognizer } from './GestureSequenceRecognizer.js'
+  hydrateTemplatesFromServer,
+  SIGN_LANGUAGE_PROFILE,
+} from '@signbridge/sign-engine'
+import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { requestCameraStream } from '../../utils/cameraStream.js'
-import { hydrateTemplatesFromServer } from '../training/KNNStorage.js'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 

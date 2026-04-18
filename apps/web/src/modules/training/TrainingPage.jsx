@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useHandDetection } from '../../hooks/useHandDetection.js'
-import { extractHandFeatures } from '../translator/HandFeatureExtractor.js'
-import { assessHandDetectionQuality } from '../translator/SignClassifier.js'
 import {
-  saveTemplate,
-  getTemplates,
+  assessHandDetectionQuality,
   clearTemplates,
   deleteTemplateById,
+  extractHandFeatures,
+  getTemplates,
   hydrateTemplatesFromServer,
-} from './KNNStorage.js'
+  saveTemplate,
+} from '@signbridge/sign-engine'
+import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { requestCameraStream, stopCameraStream } from '../../utils/cameraStream.js'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
