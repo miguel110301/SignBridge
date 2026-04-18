@@ -61,6 +61,10 @@ if (process.env.MONGODB_URI) {
 }
 
 // ── Arrancar ──────────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.send('La API de SignBridge esta funcionando correctamente en el servidor.');
+});
+
 app.listen(PORT, () => {
   console.log(`\n🟢 SignBridge server corriendo en http://localhost:${PORT}`)
   console.log(`   ElevenLabs key: ${process.env.ELEVENLABS_API_KEY ? '✓ configurada' : '✗ FALTA'}`)
