@@ -1,332 +1,161 @@
-/**
- * SignClassifier.js
- *
- * Clasificador de señas basado en geometría de landmarks.
- * No requiere entrenamiento — usa reglas basadas en la posición
- * relativa de los 21 puntos que entrega MediaPipe.
- *
- * Estrategia (para el ML dev):
- *  1. Normalizamos los landmarks relativo a la muñeca (punto 0).
- *  2. Calculamos qué dedos están "extendidos" (tip más alto que pip).
- *  3. Comparamos con la tabla de referencia del alfabeto LSM.
- *
- * Escala de confianza: 0.0 – 1.0
- * Si la confianza es < THRESHOLD, se descarta la detección.
- *
- * NOTA: Este clasificador cubre el alfabeto dactilológico estático (A–Z sin Ñ).
- * Las señas dinámicas (J, Z, Ñ) requieren análisis de movimiento — las omitimos en MVP.
- */
+import { extractHandFeatures } from './HandFeatureExtractor.js'
+import { classifyStaticLSM } from './StaticLSMClassifier.js'
 
-// ── Índices de los landmarks (ver: ai.google.dev/edge/mediapipe) ─────────────
-const LM = {
-  WRIST:       0,
-  THUMB_MCP:   2, THUMB_IP:    3, THUMB_TIP:   4,
-  INDEX_MCP:   5, INDEX_PIP:   6, INDEX_DIP:   7, INDEX_TIP:   8,
-  MIDDLE_MCP:  9, MIDDLE_PIP: 10, MIDDLE_DIP: 11, MIDDLE_TIP: 12,
-  RING_MCP:   13, RING_PIP:   14, RING_DIP:   15, RING_TIP:   16,
-  PINKY_MCP:  17, PINKY_PIP:  18, PINKY_DIP:  19, PINKY_TIP:  20,
+const HAND_QUALITY_EDGE_MARGIN = 0.04
+const SMOOTHER_MIN_RATIO = 0.7
+
+function formatFingerBit(value) {
+  return value >= 0.75 ? 1 : value >= 0.35 ? 0.5 : 0
 }
 
-const THRESHOLD = 0.65   // confianza mínima para reportar una seña
+export function extractHandMetrics(landmarks) {
+  const features = extractHandFeatures(landmarks)
+  if (!features) return null
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+  const classification = classifyStaticLSM(features)
 
-/** Distancia euclidiana entre dos landmarks */
-function dist(a, b) {
-  return Math.sqrt(
-    Math.pow(a.x - b.x, 2) +
-    Math.pow(a.y - b.y, 2)
-  )
-}
-
-/**
- * Normaliza los 21 landmarks relativo a la muñeca y escala
- * por el tamaño de la mano (distancia muñeca→dedo medio MCP).
- * Esto hace el clasificador invariante a distancia de la cámara.
- */
-function normalize(landmarks) {
-  const wrist  = landmarks[LM.WRIST]
-  const scale  = dist(wrist, landmarks[LM.MIDDLE_MCP]) || 1
-
-  return landmarks.map(lm => ({
-    x: (lm.x - wrist.x) / scale,
-    y: (lm.y - wrist.y) / scale,
-    z: (lm.z - wrist.z) / scale,
-  }))
-}
-
-/**
- * Retorna un objeto con el estado de extensión de cada dedo.
- * Un dedo está "extendido" si su TIP está más arriba (menor y) que su PIP.
- * El pulgar usa el eje X por su orientación diferente.
- */
-function getFingerStates(lm) {
   return {
-    thumb:  lm[LM.THUMB_TIP].x  < lm[LM.THUMB_IP].x,   // pulgar: TIP a la izquierda de IP
-    index:  lm[LM.INDEX_TIP].y  < lm[LM.INDEX_PIP].y,
-    middle: lm[LM.MIDDLE_TIP].y < lm[LM.MIDDLE_PIP].y,
-    ring:   lm[LM.RING_TIP].y   < lm[LM.RING_PIP].y,
-    pinky:  lm[LM.PINKY_TIP].y  < lm[LM.PINKY_PIP].y,
+    features,
+    classification,
+    fingers: {
+      thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.directions.T },
+      index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.directions.I },
+      middle: { state: features.fingers.M, extended: features.fingers.M >= 0.75, direction: features.directions.M },
+      ring: { state: features.fingers.R, extended: features.fingers.R >= 0.75, direction: features.directions.R },
+      pinky: { state: features.fingers.P, extended: features.fingers.P >= 0.75, direction: features.directions.P },
+    },
+    directions: features.directions,
+    pairs: {
+      indexMiddle: {
+        gap: features.gap_IM,
+        horizontal: features.directions.I === 'horizontal' && features.directions.M === 'horizontal',
+        vertical: features.directions.I === 'up' && features.directions.M === 'up',
+        crossed: features.crossed_IM,
+      },
+      middleRing: {
+        gap: features.gap_MR,
+        horizontal: features.directions.M === 'horizontal' && features.directions.R === 'horizontal',
+        vertical: features.directions.M === 'up' && features.directions.R === 'up',
+      },
+    },
+    relations: {
+      thumbRole: features.thumb_role,
+      crossedIM: features.crossed_IM,
+      pinchTI: features.pinch_TI,
+      pinchTM: features.pinch_TM,
+    },
+    posture: {
+      palmCenter: features.palmCenter,
+      nonThumbExtendedCount: features.meta.nonThumbExtendedCount,
+      nonThumbClosedCount: features.meta.nonThumbClosedCount,
+    },
   }
 }
 
-// ── Tabla de referencia LSM (alfabeto dactilológico estático) ─────────────────
-// Formato: { letter, check: (lm, fingers) => number (0-1) }
-// Cada función retorna un score de coincidencia.
-// Fuente de referencia: https://www.culturasorda.eu/lengua-de-senas-mexicana/
-const SIGNS = [
-  {
-    letter: 'A',
-    check: (lm, f) => {
-      // Puño cerrado, pulgar al lado (no extendido hacia arriba)
-      if (f.index || f.middle || f.ring || f.pinky) return 0
-      return f.thumb ? 0.7 : 0.9
-    }
-  },
-  {
-    letter: 'B',
-    check: (lm, f) => {
-      // Los cuatro dedos extendidos, pulgar doblado al frente
-      if (!f.index || !f.middle || !f.ring || !f.pinky) return 0
-      return f.thumb ? 0.6 : 0.95
-    }
-  },
-  {
-    letter: 'C',
-    check: (lm, f) => {
-      // Mano curvada en forma de C — ningún dedo completamente extendido
-      if (f.index || f.middle || f.ring || f.pinky) return 0
-      // Verificar curvatura: los tips deben estar a ~45° sobre MCPs
-      const indexCurve = Math.abs(lm[LM.INDEX_TIP].y - lm[LM.INDEX_MCP].y)
-      return indexCurve > 0.1 && indexCurve < 0.4 ? 0.85 : 0.3
-    }
-  },
-  {
-    letter: 'D',
-    check: (lm, f) => {
-      // Solo índice extendido, los demás doblados, pulgar toca el medio
-      if (!f.index || f.middle || f.ring || f.pinky) return 0
-      const thumbToMiddle = dist(lm[LM.THUMB_TIP], lm[LM.MIDDLE_TIP])
-      return thumbToMiddle < 0.3 ? 0.9 : 0.4
-    }
-  },
-  {
-    letter: 'E',
-    check: (lm, f) => {
-      // Todos los dedos doblados hacia la palma, uñas hacia abajo
-      if (f.index || f.middle || f.ring || f.pinky || f.thumb) return 0
-      const avgY = (
-        lm[LM.INDEX_TIP].y + lm[LM.MIDDLE_TIP].y +
-        lm[LM.RING_TIP].y  + lm[LM.PINKY_TIP].y
-      ) / 4
-      return avgY > lm[LM.INDEX_MCP].y ? 0.85 : 0.3
-    }
-  },
-  {
-    letter: 'F',
-    check: (lm, f) => {
-      // Índice y pulgar forman un círculo, otros tres extendidos
-      if (f.index || !f.middle || !f.ring || !f.pinky) return 0
-      const pinch = dist(lm[LM.THUMB_TIP], lm[LM.INDEX_TIP])
-      return pinch < 0.25 ? 0.9 : 0.3
-    }
-  },
-  {
-    letter: 'G',
-    check: (lm, f) => {
-      // Índice y pulgar extendidos apuntando al lado
-      if (!f.index || f.middle || f.ring || f.pinky) return 0
-      return f.thumb ? 0.85 : 0.5
-    }
-  },
-  {
-    letter: 'H',
-    check: (lm, f) => {
-      // Índice y medio extendidos juntos apuntando al lado
-      if (!f.index || !f.middle || f.ring || f.pinky || f.thumb) return 0
-      const fingerGap = Math.abs(lm[LM.INDEX_TIP].x - lm[LM.MIDDLE_TIP].x)
-      return fingerGap < 0.15 ? 0.9 : 0.5
-    }
-  },
-  {
-    letter: 'I',
-    check: (lm, f) => {
-      // Solo meñique extendido
-      if (f.index || f.middle || f.ring || !f.pinky) return 0
-      return f.thumb ? 0.7 : 0.9
-    }
-  },
-  {
-    letter: 'K',
-    check: (lm, f) => {
-      // Índice y medio extendidos separados, pulgar entre ellos
-      if (!f.index || !f.middle || f.ring || f.pinky) return 0
-      const fingerGap = Math.abs(lm[LM.INDEX_TIP].x - lm[LM.MIDDLE_TIP].x)
-      return fingerGap > 0.15 ? 0.85 : 0.4
-    }
-  },
-  {
-    letter: 'L',
-    check: (lm, f) => {
-      // Índice hacia arriba, pulgar hacia el lado (forma L)
-      if (!f.index || f.middle || f.ring || f.pinky || !f.thumb) return 0
-      const angle = Math.abs(lm[LM.INDEX_TIP].y - lm[LM.THUMB_TIP].y)
-      return angle > 0.3 ? 0.9 : 0.5
-    }
-  },
-  {
-    letter: 'M',
-    check: (lm, f) => {
-      // Tres dedos sobre el pulgar doblado
-      if (f.index || f.middle || f.ring || f.pinky || f.thumb) return 0
-      const thumbUnder = lm[LM.THUMB_TIP].y > lm[LM.INDEX_MCP].y
-      return thumbUnder ? 0.8 : 0.3
-    }
-  },
-  {
-    letter: 'N',
-    check: (lm, f) => {
-      // Dos dedos sobre el pulgar doblado (similar a M pero con 2)
-      if (!f.index || f.middle || f.ring || f.pinky) return 0
-      const thumbUnder = lm[LM.THUMB_TIP].y > lm[LM.INDEX_PIP].y
-      return thumbUnder ? 0.8 : 0.3
-    }
-  },
-  {
-    letter: 'O',
-    check: (lm, f) => {
-      // Todos los dedos forman un círculo con el pulgar
-      if (f.index || f.middle || f.ring || f.pinky) return 0
-      const pinch = dist(lm[LM.THUMB_TIP], lm[LM.INDEX_TIP])
-      return pinch < 0.2 ? 0.9 : 0.4
-    }
-  },
-  {
-    letter: 'P',
-    check: (lm, f) => {
-      // Similar a K pero apuntando hacia abajo
-      if (!f.index || !f.middle || f.ring || f.pinky) return 0
-      const pointingDown = lm[LM.INDEX_TIP].y > lm[LM.INDEX_MCP].y
-      return pointingDown ? 0.85 : 0.3
-    }
-  },
-  {
-    letter: 'Q',
-    check: (lm, f) => {
-      // Similar a G pero apuntando hacia abajo
-      if (!f.index || f.middle || f.ring || f.pinky || !f.thumb) return 0
-      const pointingDown = lm[LM.INDEX_TIP].y > lm[LM.INDEX_MCP].y
-      return pointingDown ? 0.85 : 0.3
-    }
-  },
-  {
-    letter: 'R',
-    check: (lm, f) => {
-      // Índice y medio cruzados
-      if (!f.index || !f.middle || f.ring || f.pinky) return 0
-      const crossed = lm[LM.INDEX_TIP].x > lm[LM.MIDDLE_TIP].x
-      return crossed ? 0.9 : 0.4
-    }
-  },
-  {
-    letter: 'S',
-    check: (lm, f) => {
-      // Puño cerrado con pulgar sobre los dedos
-      if (f.index || f.middle || f.ring || f.pinky) return 0
-      const thumbOver = lm[LM.THUMB_TIP].x < lm[LM.INDEX_MCP].x
-      return thumbOver ? 0.85 : 0.5
-    }
-  },
-  {
-    letter: 'T',
-    check: (lm, f) => {
-      // Pulgar entre índice y medio doblados
-      if (f.index || f.middle || f.ring || f.pinky) return 0
-      const thumbBetween =
-        lm[LM.THUMB_TIP].x > lm[LM.INDEX_MCP].x &&
-        lm[LM.THUMB_TIP].x < lm[LM.MIDDLE_MCP].x
-      return thumbBetween ? 0.85 : 0.4
-    }
-  },
-  {
-    letter: 'U',
-    check: (lm, f) => {
-      // Índice y medio extendidos juntos hacia arriba
-      if (!f.index || !f.middle || f.ring || f.pinky) return 0
-      const gap = Math.abs(lm[LM.INDEX_TIP].x - lm[LM.MIDDLE_TIP].x)
-      return gap < 0.12 ? 0.9 : 0.4
-    }
-  },
-  {
-    letter: 'V',
-    check: (lm, f) => {
-      // Índice y medio en V (separados)
-      if (!f.index || !f.middle || f.ring || f.pinky) return 0
-      const gap = Math.abs(lm[LM.INDEX_TIP].x - lm[LM.MIDDLE_TIP].x)
-      return gap > 0.15 ? 0.9 : 0.4
-    }
-  },
-  {
-    letter: 'W',
-    check: (lm, f) => {
-      // Índice, medio y anular extendidos separados
-      if (!f.index || !f.middle || !f.ring || f.pinky) return 0
-      return 0.85
-    }
-  },
-  {
-    letter: 'X',
-    check: (lm, f) => {
-      // Índice doblado en gancho
-      if (f.middle || f.ring || f.pinky) return 0
-      const hookY = lm[LM.INDEX_TIP].y > lm[LM.INDEX_PIP].y
-      return hookY && !f.index ? 0.85 : 0.3
-    }
-  },
-  {
-    letter: 'Y',
-    check: (lm, f) => {
-      // Pulgar y meñique extendidos (shaka)
-      if (f.index || f.middle || f.ring || !f.pinky || !f.thumb) return 0
-      return 0.9
-    }
-  },
-]
+export function debugFingers(landmarks) {
+  const metrics = extractHandMetrics(landmarks)
+  if (!metrics) return 'T:- I:- M:- R:- P:- gap:-'
 
-// ── Función principal ─────────────────────────────────────────────────────────
+  const { features } = metrics
+  return [
+    `T:${formatFingerBit(features.fingers.T)}`,
+    `I:${formatFingerBit(features.fingers.I)}`,
+    `M:${formatFingerBit(features.fingers.M)}`,
+    `R:${formatFingerBit(features.fingers.R)}`,
+    `P:${formatFingerBit(features.fingers.P)}`,
+    `gap:${features.gap_IM.toFixed(2)}`,
+  ].join(' ')
+}
 
-/**
- * Clasifica los 21 landmarks de MediaPipe en una letra LSM.
- *
- * @param {Array} landmarks - Array de 21 puntos {x, y, z} de MediaPipe
- * @returns {{ letter: string, confidence: number } | null}
- */
+export function assessHandDetectionQuality(landmarks) {
+  if (!landmarks || landmarks.length !== 21) {
+    return {
+      reliable: false,
+      qualityScore: 0,
+      status: 'poor',
+      reasons: ['sin_landmarks'],
+      bbox: null,
+      edgeTouches: 0,
+      area: 0,
+    }
+  }
+
+  const xs = landmarks.map((point) => point.x)
+  const ys = landmarks.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const width = maxX - minX
+  const height = maxY - minY
+  const area = width * height
+
+  const edgeTouches = landmarks.filter((point) => (
+    point.x < HAND_QUALITY_EDGE_MARGIN ||
+    point.x > 1 - HAND_QUALITY_EDGE_MARGIN ||
+    point.y < HAND_QUALITY_EDGE_MARGIN ||
+    point.y > 1 - HAND_QUALITY_EDGE_MARGIN
+  )).length
+
+  const sizeScore = Math.max(0, Math.min(1, (area - 0.015) / 0.085))
+  const widthScore = Math.max(0, Math.min(1, (width - 0.1) / 0.22))
+  const heightScore = Math.max(0, Math.min(1, (height - 0.1) / 0.28))
+  const edgeScore = Math.max(0, 1 - (edgeTouches / 6))
+
+  const qualityScore =
+    (sizeScore * 0.4) +
+    (widthScore * 0.2) +
+    (heightScore * 0.15) +
+    (edgeScore * 0.25)
+
+  const reasons = []
+  if (edgeTouches >= 5) reasons.push('mano_recortada')
+  if (area < 0.02) reasons.push('mano_pequena')
+  if (width < 0.11) reasons.push('poco_ancho')
+  if (height < 0.11) reasons.push('poco_alto')
+  if (qualityScore < 0.44) reasons.push('landmarks_inestables')
+
+  const status =
+    qualityScore >= 0.66 && edgeTouches <= 4
+      ? 'good'
+      : qualityScore >= 0.44 && edgeTouches <= 6
+        ? 'fair'
+        : 'poor'
+
+  return {
+    reliable: status !== 'poor',
+    qualityScore,
+    status,
+    reasons,
+    edgeTouches,
+    area,
+    bbox: {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      width,
+      height,
+    },
+  }
+}
+
 export function classifySign(landmarks) {
-  if (!landmarks || landmarks.length !== 21) return null
+  const features = extractHandFeatures(landmarks)
+  if (!features) return null
 
-  const norm    = normalize(landmarks)
-  const fingers = getFingerStates(norm)
+  const classification = classifyStaticLSM(features)
+  if (!classification.bestCandidate) return null
 
-  let best = { letter: null, confidence: 0 }
-
-  for (const sign of SIGNS) {
-    const score = sign.check(norm, fingers)
-    if (score > best.confidence) {
-      best = { letter: sign.letter, confidence: score }
-    }
+  return {
+    letter: classification.bestCandidate.letter,
+    confidence: classification.bestCandidate.confidence,
+    candidates: classification.topCandidates,
+    classifierDebug: classification,
+    secondCandidateFailure: classification.topCandidates[1]?.failedRule ?? null,
   }
-
-  return best.confidence >= THRESHOLD ? best : null
 }
 
-/**
- * Suavizador de predicciones: evita el parpadeo de letras
- * acumulando las últimas N predicciones y devolviendo la más frecuente.
- *
- * Uso:
- *   const smoother = createSmoother(8)
- *   const stable = smoother.push(classifySign(landmarks))
- */
 export function createSmoother(windowSize = 8) {
   const buffer = []
 
@@ -337,20 +166,26 @@ export function createSmoother(windowSize = 8) {
       buffer.push(prediction.letter)
       if (buffer.length > windowSize) buffer.shift()
 
-      // Frecuencia de cada letra en el buffer
-      const freq = buffer.reduce((acc, l) => {
-        acc[l] = (acc[l] || 0) + 1
+      const frequency = buffer.reduce((acc, letter) => {
+        acc[letter] = (acc[letter] || 0) + 1
         return acc
       }, {})
 
-      const topLetter = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]
+      const topLetter = Object.entries(frequency).sort((a, b) => b[1] - a[1])[0]
+      if (!topLetter) return null
 
-      // Solo retorna si la letra aparece más del 60% del tiempo
-      if (topLetter[1] / buffer.length >= 0.6) {
-        return { letter: topLetter[0], confidence: topLetter[1] / buffer.length }
+      const ratio = topLetter[1] / buffer.length
+      if (ratio >= SMOOTHER_MIN_RATIO) {
+        return {
+          letter: topLetter[0],
+          confidence: ratio,
+        }
       }
+
       return null
     },
-    reset() { buffer.length = 0 }
+    reset() {
+      buffer.length = 0
+    },
   }
 }

@@ -1,0 +1,26 @@
+name: Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegando en Vultr via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            if [ ! -d "/root/SignBridge" ]; then
+              git clone git@github.com:miguel110301/SignBridge.git /root/SignBridge
+            fi
+            cd /root/SignBridge
+            git pull origin main
+            cd server
+            npm install
+            pm2 restart signbridge-api || pm2 start index.js --name signbridge-api
