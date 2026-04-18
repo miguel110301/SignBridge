@@ -24,6 +24,28 @@ function magnitude(vector) {
   return Math.hypot(vector.x, vector.y)
 }
 
+function magnitude3D(vector) {
+  return Math.hypot(vector.x, vector.y, vector.z ?? 0)
+}
+
+function normalize2D(vector) {
+  const length = magnitude(vector) || 1
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+    z: (vector.z ?? 0) / length,
+  }
+}
+
+function normalize3D(vector) {
+  const length = magnitude3D(vector) || 1
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+    z: (vector.z ?? 0) / length,
+  }
+}
+
 function average(values) {
   if (!values.length) return 0
   return values.reduce((sum, value) => sum + value, 0) / values.length
@@ -43,6 +65,14 @@ function classifyDirection(direction) {
 
   if (absX >= absY * 1.2) return 'horizontal'
   return direction.y >= 0 ? 'up' : 'down'
+}
+
+function classifyCameraDirection(direction) {
+  const absX = Math.abs(direction.x)
+  const absY = Math.abs(direction.y)
+
+  if (absX >= absY * 1.2) return 'horizontal'
+  return direction.y <= 0 ? 'up' : 'down'
 }
 
 function scoreFingerState({ mcp, pip, dip, tip }) {
@@ -96,9 +126,7 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     const wIndex = worldLandmarks[LM.INDEX_MCP]
     const wPinky = worldLandmarks[LM.PINKY_MCP]
     const rawNormal = cross(vec(wWrist, wIndex), vec(wWrist, wPinky))
-    const length = magnitude({ x: rawNormal.x, y: rawNormal.y }) || 1 // crude normalize
-    const m = Math.hypot(rawNormal.x, rawNormal.y, rawNormal.z) || 1
-    palmNormal = { x: rawNormal.x / m, y: rawNormal.y / m, z: rawNormal.z / m }
+    palmNormal = normalize3D(rawNormal)
     
     // Determinar orientación dominante
     const zDir = palmNormal.z
@@ -138,6 +166,40 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     M: classifyDirection(vec(middle.mcp, middle.tip)),
     R: classifyDirection(vec(ring.mcp, ring.tip)),
     P: classifyDirection(vec(pinky.mcp, pinky.tip)),
+  }
+
+  const rawThumb = {
+    mcp: landmarks[LM.THUMB_MCP],
+    tip: landmarks[LM.THUMB_TIP],
+  }
+  const rawIndex = {
+    mcp: landmarks[LM.INDEX_MCP],
+    tip: landmarks[LM.INDEX_TIP],
+  }
+  const rawMiddle = {
+    mcp: landmarks[LM.MIDDLE_MCP],
+    tip: landmarks[LM.MIDDLE_TIP],
+  }
+  const rawRing = {
+    mcp: landmarks[LM.RING_MCP],
+    tip: landmarks[LM.RING_TIP],
+  }
+  const rawPinky = {
+    mcp: landmarks[LM.PINKY_MCP],
+    tip: landmarks[LM.PINKY_TIP],
+  }
+
+  const cameraDirections = {
+    T: classifyCameraDirection(vec(rawThumb.mcp, rawThumb.tip)),
+    I: classifyCameraDirection(vec(rawIndex.mcp, rawIndex.tip)),
+    M: classifyCameraDirection(vec(rawMiddle.mcp, rawMiddle.tip)),
+    R: classifyCameraDirection(vec(rawRing.mcp, rawRing.tip)),
+    P: classifyCameraDirection(vec(rawPinky.mcp, rawPinky.tip)),
+  }
+
+  const screenAxes = {
+    x: normalize2D(vec(landmarks[LM.PINKY_MCP], landmarks[LM.INDEX_MCP])),
+    y: normalize2D(vec(landmarks[LM.WRIST], landmarks[LM.MIDDLE_MCP])),
   }
 
   const gapIM = Math.abs(index.tip.x - middle.tip.x)
@@ -182,6 +244,7 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     palmCenter: getPalmCenter(landmarks),
     fingers: fingerStates,
     directions,
+    camera_directions: cameraDirections,
     gap_IM: gapIM,
     gap_MR: gapMR,
     crossed_IM: crossedIM,
@@ -199,5 +262,8 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     },
     palm_normal: palmNormal,
     palm_orientation: palmOrientation,
+    axes: {
+      screen: screenAxes,
+    },
   }
 }
