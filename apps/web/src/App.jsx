@@ -31,7 +31,7 @@ export default function App() {
         <Navbar isDark={isDark} onToggleDark={toggleDark} />
       )}
 
-      <main className={isImmersiveRoute ? 'h-full' : 'flex-1 pb-20 md:pb-0'}>
+      <main className={isImmersiveRoute ? 'h-full' : 'flex-1'}>
         <Routes>
           <Route path="/"           element={<LandingPage />} />
           <Route path="/login"      element={<AuthPage />} />

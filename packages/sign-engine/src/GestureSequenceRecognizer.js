@@ -189,6 +189,14 @@ function detectHola(windowFrames, config) {
   const validFrames = windowFrames.filter((frame) => frame.reliableHand)
   if (validFrames.length < 3) return null
 
+  // Filtro de forma de mano: debe ser dos dedos extendidos la mayoría del tiempo
+  const twoFingerRatio = validFrames.filter((f) => f.twoFingerHandshape).length / validFrames.length
+  if (twoFingerRatio < config.minTwoFingerRatio) return null
+
+  // Filtro de posición: la mano debe estar cerca de la cabeza
+  const nearHeadRatio = validFrames.filter((f) => f.nearHead).length / validFrames.length
+  if (nearHeadRatio < config.minNearHeadRatio) return null
+
   const firstFrame = validFrames[0]
   const lastFrame = validFrames[validFrames.length - 1]
 
@@ -203,7 +211,7 @@ function detectHola(windowFrames, config) {
   // Si distanceY es muy alto (ej. subiendo la mano a la cabeza), esto da falso y lo ignora.
   const isHorizontal = distanceX > (distanceY * 1.5)
 
-  // Si cumple ambas, entonces sí es un "Hola"
+  // Si cumple todos los filtros, entonces sí es un "Hola"
   if (isLongEnough && isHorizontal) { 
     return {
       gesture: 'hola',
@@ -212,6 +220,8 @@ function detectHola(windowFrames, config) {
       debug: {
         distanceX,
         distanceY,
+        twoFingerRatio,
+        nearHeadRatio,
         frameCount: windowFrames.length,
       },
     }
@@ -264,7 +274,7 @@ export function createGestureSequenceRecognizer() {
       }
 
       const dtwResult = classifyDTW(history)
-      if (dtwResult && dtwResult.confidence > 0.6) {
+      if (dtwResult && dtwResult.confidence > 0.75) {
         const historySnapshot = history.slice()
         lastGestureAt = timestamp
         history.length = 0

@@ -93,7 +93,26 @@ async function migrateMissingLocalSamples(localData, serverData) {
 
 function writeTemplates(data) {
   memoryCache = data
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+
+  // Las secuencias dinámicas (frames DTW) pueden ser muy grandes para localStorage.
+  // Solo guardamos localmente las muestras estáticas; las secuencias viven únicamente en MongoDB.
+  const localSafe = {}
+  for (const [label, samples] of Object.entries(data || {})) {
+    const staticOnly = (samples || []).filter((s) => s.type !== 'sequence')
+    if (staticOnly.length > 0) {
+      localSafe[label] = staticOnly
+    }
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(localSafe))
+  } catch (e) {
+    // Si aún así se desborda (muchos moldes estáticos), limpiamos la cache local
+    // para no bloquear al usuario. Los datos están seguros en MongoDB.
+    console.warn('[KNNStorage] localStorage lleno, limpiando cache local:', e)
+    try { localStorage.removeItem(STORAGE_KEY) } catch (_) {}
+  }
+
   return data
 }
 
