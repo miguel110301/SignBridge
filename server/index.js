@@ -8,11 +8,9 @@
  *  - CRUD de progreso del usuario en MongoDB Atlas
  */
 
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import path from 'path'
-import { fileURLToPath } from 'url'
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.join(__dirname, '../.env') })
 
 import express    from 'express'
 import cors       from 'cors'
@@ -21,6 +19,15 @@ import elevenRoute  from './routes/elevenlabs.js'
 import geminiRoute  from './routes/gemini.js'
 import progressRoute from './routes/progress.js'
 import trainingRoute from './routes/training.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Soporta ambos escenarios:
+// 1. `server/.env` cuando el backend tiene su propio archivo
+// 2. `../.env` cuando el monorepo comparte variables desde la raiz
+dotenv.config({ path: path.resolve(__dirname, '.env') })
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false })
 
 const app  = express()
 const PORT = process.env.PORT || 3001
