@@ -1,0 +1,146 @@
+{
+  "nav": {
+    "features": "Funcionalidades",
+    "howItWorks": "Cómo Funciona",
+    "testimonials": "Testimonios",
+    "cta": "Comenzar Ahora"
+  },
+  "hero": {
+    "badge": "Tecnología inclusiva para la salud",
+    "title": "Yo también hablo",
+    "titleHighlight": "tu idioma",
+    "description": "SignBridge conecta a pacientes sordos con nuestros profesionales de la salud en el Hospital Moscati a través de tecnología intuitiva, garantizando una atención médica clara, empática y sin barreras.",
+    "feature1": "Traducción de lengua de señas en tiempo real",
+    "feature2": "Comunicación bidireccional paciente-médico",
+    "feature3": "Asistente de IA para consultas médicas",
+    "cta": "Comenzar Ahora",
+    "ctaSecondary": "Ver Demostración",
+    "socialProof": "Más de {count}+ profesionales de la salud confían en SignBridge"
+  },
+  "preview": {
+    "sidebar": {
+      "dashboard": "Panel",
+      "patients": "Pacientes",
+      "translator": "Traductor",
+      "history": "Historial",
+      "settings": "Ajustes"
+    },
+    "welcome": "Bienvenido/a, Dr. {name}",
+    "summary": "Resumen de actividad de hoy",
+    "stats": {
+      "patients": "Pacientes Activos",
+      "translations": "Traducciones Hoy",
+      "satisfaction": "Satisfacción"
+    }
+  },
+  "features": {
+    "badge": "Funcionalidades",
+    "title": "Todo lo que necesitas para una comunicación sin barreras",
+    "description": "SignBridge ofrece herramientas avanzadas para facilitar la comunicación entre profesionales de la salud y pacientes sordos.",
+    "signDetection": {
+      "title": "Detección de Señas",
+      "description": "Reconocimiento en tiempo real de lengua de señas mediante inteligencia artificial y visión por computadora."
+    },
+    "textToSpeech": {
+      "title": "Texto a Voz",
+      "description": "Convierte texto traducido en voz natural para que el paciente pueda escuchar al profesional."
+    },
+    "aiAssistant": {
+      "title": "Asistente IA",
+      "description": "Un asistente inteligente que ayuda a interpretar contexto médico y sugiere respuestas apropiadas."
+    },
+    "progressTracking": {
+      "title": "Seguimiento de Progreso",
+      "description": "Monitorea el historial de consultas y mejora la comunicación con cada interacción."
+    },
+    "bidirectional": {
+      "title": "Comunicación Bidireccional",
+      "description": "Permite la comunicación en ambas direcciones: del médico al paciente y del paciente al médico."
+    },
+    "analytics": {
+      "title": "Analíticas",
+      "description": "Estadísticas detalladas sobre el uso, traducciones realizadas y métricas de calidad de servicio."
+    }
+  },
+  "bento": {
+    "badge": "Experiencia Completa",
+    "heading": "Diseñado para el entorno hospitalario",
+    "mobile": {
+      "title": "Acceso Móvil",
+      "description": "Usa SignBridge desde cualquier dispositivo, incluyendo tablets en consultorios médicos.",
+      "comingSoon": "App Móvil Próximamente"
+    },
+    "vocabulary": {
+      "title": "Vocabulario Médico",
+      "description": "Biblioteca especializada de señas médicas para consultas precisas.",
+      "examples": ["Diagnóstico", "Medicamento", "Síntomas", "Tratamiento", "Emergencia", "Cita Médica"]
+    },
+    "progress": {
+      "title": "Historial de Consultas",
+      "description": "Registro completo de todas las traducciones y consultas realizadas."
+    },
+    "assistant": {
+      "title": "Asistente SignBridge",
+      "description": "IA contextual que entiende terminología médica y facilita la comunicación.",
+      "aiLabel": "SignBridge AI",
+      "youLabel": "Tú",
+      "youSample": "¿Cómo le explico el diagnóstico al paciente?",
+      "aiSample": "Te sugiero usar señas simples para 'diagnóstico'. Puedo ayudarte a traducir paso a paso el resultado."
+    }
+  },
+  "testimonials": {
+    "badge": "Testimonios",
+    "title": "Lo que dicen nuestros usuarios",
+    "items": [
+      {
+        "quote": "SignBridge ha transformado la forma en que atiendo a mis pacientes sordos. La comunicación ahora es fluida y empática.",
+        "name": "Dra. María González",
+        "role": "Médica General - Hospital Moscati",
+        "initials": "MG",
+        "avatar": 1
+      },
+      {
+        "quote": "Por primera vez me sentí realmente comprendida en una consulta médica. Esta herramienta cambia vidas.",
+        "name": "Ana Torres",
+        "role": "Paciente",
+        "initials": "AT",
+        "avatar": 2
+      },
+      {
+        "quote": "La precisión de la detección de señas es impresionante. Facilita enormemente nuestro trabajo diario.",
+        "name": "Dr. Carlos Ruiz",
+        "role": "Especialista - Hospital Moscati",
+        "initials": "CR",
+        "avatar": 3
+      },
+      {
+        "quote": "Una solución necesaria que debería estar en todos los hospitales. La tecnología al servicio de la inclusión.",
+        "name": "Laura Méndez",
+        "role": "Directora de Inclusión",
+        "initials": "LM",
+        "avatar": 4
+      }
+    ]
+  },
+  "cta": {
+    "title": "Comunicación sin barreras empieza aquí",
+    "description": "Únete a los profesionales de la salud que ya están transformando la atención médica para pacientes sordos con SignBridge.",
+    "button": "Comenzar Gratis"
+  },
+  "footer": {
+    "description": "Tecnología inclusiva para conectar profesionales de la salud con pacientes sordos.",
+    "product": "Producto",
+    "links": {
+      "features": "Funcionalidades",
+      "pricing": "Precios",
+      "demo": "Demostración"
+    },
+    "company": "Proyecto",
+    "companyLinks": {
+      "about": "Sobre Nosotros",
+      "contact": "Contacto",
+      "blog": "Blog"
+    },
+    "rights": "Todos los derechos reservados."
+  }
+}
