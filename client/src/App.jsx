@@ -4,6 +4,8 @@ import PracticePage   from './modules/practice/PracticePage.jsx'
 import LandingPage    from './modules/landing/LandingPage.jsx'
 import TrainingPage   from './modules/training/TrainingPage.jsx'
 
+//comentario de prueba
+
 export default function App() {
   const location = useLocation()
   const isImmersiveRoute = location.pathname === '/traductor'
