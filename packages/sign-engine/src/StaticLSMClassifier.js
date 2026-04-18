@@ -16,6 +16,16 @@ function scoreDirection(actual, expected) {
   return actual === expected ? 1 : 0
 }
 
+function scoreAtLeast(value, target, softness = 0.18) {
+  if (value >= target) return 1
+  return clamp01(1 - ((target - value) / softness))
+}
+
+function scoreAtMost(value, target, softness = 0.18) {
+  if (value <= target) return 1
+  return clamp01(1 - ((value - target) / softness))
+}
+
 function scoreLessThan(value, target, softness = 0.05) {
   if (value <= target) return 1
   return clamp01(1 - ((value - target) / softness))
@@ -42,6 +52,32 @@ function scoreRole(actual, expected) {
 
 function worldDir(features, fingerKey) {
   return features.camera_directions?.[fingerKey] ?? features.directions?.[fingerKey]
+}
+
+function cameraVector(features, fingerKey) {
+  return features.camera_vectors?.[fingerKey] ?? null
+}
+
+function scoreSignedVector(features, fingerKey, expected, threshold = 0.58) {
+  const vector = cameraVector(features, fingerKey)
+  if (!vector) return 0
+
+  const absX = Math.abs(vector.x)
+  const absY = Math.abs(vector.y)
+
+  if (expected === 'horizontal') {
+    return scoreAtLeast(absX - absY, 0.08, 0.22) * scoreAtLeast(absX, threshold, 0.2)
+  }
+
+  if (expected === 'up') {
+    return scoreAtLeast((-vector.y) - absX, 0.05, 0.22) * scoreAtLeast(-vector.y, threshold, 0.2)
+  }
+
+  if (expected === 'down') {
+    return scoreAtLeast(vector.y - absX, 0.05, 0.22) * scoreAtLeast(vector.y, threshold, 0.2)
+  }
+
+  return 0
 }
 
 function scoreCurlUp(value) {
@@ -151,6 +187,10 @@ function getCoreCandidates(features) {
       [
         check('gap_IM compacto', scoreLessThan(features.gap_IM, 0.1), 1.6),
         check('gap_MR compacto', scoreLessThan(features.gap_MR, 0.1), 1.2),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
+        check('vector R up', scoreSignedVector(features, 'R', 'up'), 1.8, true),
+        check('vector P up', scoreSignedVector(features, 'P', 'up'), 1.8, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'up', P: 'up' })
     ),
@@ -173,6 +213,7 @@ function getCoreCandidates(features) {
       [
         check('pinch_TM < 0.15', scoreLessThan(features.pinch_TM, 0.15), 3, true),
         check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2, true),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'curled', R: 'curled', P: 'curled' })
     ),
@@ -202,6 +243,8 @@ function getCoreCandidates(features) {
         check('direccion I horizontal', scoreDirection(worldDir(features, 'I'), 'horizontal'), 2.2, true),
         check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 2, true),
+        check('vector I horizontal', scoreSignedVector(features, 'I', 'horizontal'), 2, true),
+        check('vector T horizontal', scoreSignedVector(features, 'T', 'horizontal'), 1.8, true),
       ],
       [
         check('curl I horizontal', scoreRange(features.curl.I, -0.08, 0.08, 0.12), 1),
@@ -215,6 +258,8 @@ function getCoreCandidates(features) {
         check('direccion I horizontal', scoreDirection(worldDir(features, 'I'), 'horizontal'), 2.2, true),
         check('direccion M horizontal', scoreDirection(worldDir(features, 'M'), 'horizontal'), 2.2, true),
         check('gap_IM < 0.10', scoreLessThan(features.gap_IM, 0.1), 2.2, true),
+        check('vector I horizontal', scoreSignedVector(features, 'I', 'horizontal'), 2, true),
+        check('vector M horizontal', scoreSignedVector(features, 'M', 'horizontal'), 2, true),
       ],
       [
         check('curl I horizontal', scoreRange(features.curl.I, -0.08, 0.08, 0.12), 1),
@@ -226,6 +271,7 @@ function getCoreCandidates(features) {
       fingerChecks(features, { T: 0, I: 0, M: 0, R: 0, P: 1 }),
       [
         check('direccion P up', scoreDirection(worldDir(features, 'P'), 'up'), 2, true),
+        check('vector P up', scoreSignedVector(features, 'P', 'up'), 2.2, true),
       ],
       curlChecks(features, { P: 'up', I: 'curled', M: 'curled', R: 'curled' })
     ),
@@ -237,6 +283,9 @@ function getCoreCandidates(features) {
         check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
         check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('direccion T up', scoreDirection(worldDir(features, 'T'), 'up'), 1.8, true),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
+        check('vector T up', scoreSignedVector(features, 'T', 'up', 0.48), 1.6),
         check('gap_IM > 0.14', scoreGreaterThan(features.gap_IM, 0.14), 2.2, true),
         check('thumb arriba de index_mcp', scoreGreaterThan(thumbTip.y - indexMcp.y, 0.03), 2.6, true),
         check('thumb_role between', scoreRole(features.thumb_role, 'between'), 2, true),
@@ -251,6 +300,8 @@ function getCoreCandidates(features) {
         check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 2.6, true),
         check('pinch_TM no', 1 - scoreLessThan(features.pinch_TM, 0.16), 1.2),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector T horizontal', scoreSignedVector(features, 'T', 'horizontal'), 2, true),
       ],
       [
         check('curl I up', scoreCurlUp(features.curl.I), 1),
@@ -297,6 +348,8 @@ function getCoreCandidates(features) {
         check('direccion M down', scoreDirection(worldDir(features, 'M'), 'down'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.8),
         check('palma hacia abajo', scoreBoolean(features.palm_orientation, 'down'), 1.8),
+        check('vector I down', scoreSignedVector(features, 'I', 'down'), 2.2, true),
+        check('vector M down', scoreSignedVector(features, 'M', 'down'), 2.2, true),
       ],
       curlChecks(features, { I: 'down', M: 'down', R: 'curled', P: 'curled' })
     ),
@@ -308,6 +361,8 @@ function getCoreCandidates(features) {
         check('direccion T down', scoreDirection(worldDir(features, 'T'), 'down'), 2, true),
         check('pinch_TI medio', scoreRange(features.pinch_TI, 0.15, 0.35, 0.12), 1.2),
         check('palma hacia abajo', scoreBoolean(features.palm_orientation, 'down'), 1.8),
+        check('vector I down', scoreSignedVector(features, 'I', 'down'), 2.2, true),
+        check('vector T down', scoreSignedVector(features, 'T', 'down', 0.42), 1.8),
       ],
       curlChecks(features, { I: 'down', M: 'curled', R: 'curled', P: 'curled' })
     ),
@@ -319,6 +374,8 @@ function getCoreCandidates(features) {
         check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
         check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM < 0.14', scoreLessThan(features.gap_IM, 0.14), 1.4),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })
     ),
@@ -347,6 +404,8 @@ function getCoreCandidates(features) {
         check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
         check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM < 0.10', scoreLessThan(features.gap_IM, 0.1), 3.2, true),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })
     ),
@@ -358,6 +417,8 @@ function getCoreCandidates(features) {
         check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
         check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM > 0.18', scoreGreaterThan(features.gap_IM, 0.18), 3.2, true),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })
     ),
@@ -367,6 +428,9 @@ function getCoreCandidates(features) {
       [
         check('gap_IM > 0.12', scoreGreaterThan(features.gap_IM, 0.12), 1.6),
         check('gap_MR > 0.10', scoreGreaterThan(features.gap_MR, 0.1), 1.6),
+        check('vector I up', scoreSignedVector(features, 'I', 'up'), 2.2, true),
+        check('vector M up', scoreSignedVector(features, 'M', 'up'), 2.2, true),
+        check('vector R up', scoreSignedVector(features, 'R', 'up'), 2.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'up', P: 'curled' })
     ),
@@ -377,6 +441,8 @@ function getCoreCandidates(features) {
         check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 1.8),
         check('direccion P up', scoreDirection(worldDir(features, 'P'), 'up'), 1.6),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.6),
+        check('vector T horizontal', scoreSignedVector(features, 'T', 'horizontal', 0.48), 1.6),
+        check('vector P up', scoreSignedVector(features, 'P', 'up'), 1.8),
       ],
       curlChecks(features, { P: 'up', I: 'curled', M: 'curled', R: 'curled' })
     ),

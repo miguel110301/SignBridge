@@ -6,6 +6,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '../../i18n/I18nProvider.jsx'
+import Logo from '../../components/Logo.jsx'
 
 /* ── Value Icons (inline SVG) ─────────────────────────────────────────────── */
 const VALUE_ICONS = {
@@ -40,7 +41,7 @@ export default function LandingPage() {
   return (
     <div className="relative overflow-hidden">
       {/* Background gradient */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.08),_transparent_50%)] dark:bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.22),_transparent_38%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.12),_transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(57,194,215,0.08),_transparent_50%)] dark:bg-[radial-gradient(circle_at_top,_rgba(17,54,88,0.4),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(57,194,215,0.12),_transparent_30%)]" />
 
       <div className="relative mx-auto flex max-w-5xl flex-col gap-10 px-4 py-8 sm:px-6 sm:py-12 sm:gap-16">
 
@@ -299,11 +300,8 @@ export default function LandingPage() {
         </section>
 
         {/* ── Footer ── */}
-        <footer className="flex flex-col items-center gap-2 py-6 text-center text-xs text-zinc-500 dark:text-zinc-500">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white text-xs font-bold">S</div>
-            <span className="font-bold text-brand-600 dark:text-brand-400">SignBridge</span>
-          </div>
+        <footer className="flex flex-col items-center gap-3 py-6 text-center text-xs text-zinc-500 dark:text-zinc-500">
+          <Logo size="sm" withText={false} />
           <p>{t('footer.tagline')}</p>
           <p>&copy; {new Date().getFullYear()} SignBridge. {t('footer.rights')}</p>
         </footer>

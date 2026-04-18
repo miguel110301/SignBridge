@@ -31,8 +31,8 @@ export default defineConfig(({ mode }) => {
           name: 'SignBridge',
           short_name: 'SignBridge',
           description: 'Real-time sign language interpreter powered by AI',
-          theme_color: '#7C3AED',
-          background_color: '#0f0f0f',
+          theme_color: '#0b1928',
+          background_color: '#0b1928',
           display: 'standalone',
           orientation: 'portrait',
           icons: [

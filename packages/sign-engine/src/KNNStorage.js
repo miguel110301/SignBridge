@@ -2,6 +2,7 @@ const STORAGE_KEY = 'signbridge_knn_dataset'
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
 let memoryCache = null
+let storagePersistenceAvailable = true
 
 function normalizeLabel(label) {
   const value = String(label || '').trim()
@@ -94,6 +95,7 @@ async function migrateMissingLocalSamples(localData, serverData) {
 function writeTemplates(data) {
   memoryCache = data
 
+<<<<<<< HEAD
   // Las secuencias dinámicas (frames DTW) pueden ser muy grandes para localStorage.
   // Solo guardamos localmente las muestras estáticas; las secuencias viven únicamente en MongoDB.
   const localSafe = {}
@@ -111,6 +113,19 @@ function writeTemplates(data) {
     // para no bloquear al usuario. Los datos están seguros en MongoDB.
     console.warn('[KNNStorage] localStorage lleno, limpiando cache local:', e)
     try { localStorage.removeItem(STORAGE_KEY) } catch (_) {}
+=======
+  if (!storagePersistenceAvailable) {
+    return data
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (error) {
+    storagePersistenceAvailable = false
+    if (error?.name !== 'QuotaExceededError') {
+      console.warn('[KNNStorage] No se pudo persistir dataset en localStorage; usando cache en memoria.', error)
+    }
+>>>>>>> origin/main
   }
 
   return data
@@ -123,6 +138,7 @@ function readTemplates() {
     const raw = localStorage.getItem(STORAGE_KEY)
     memoryCache = raw ? JSON.parse(raw) : {}
   } catch (e) {
+    storagePersistenceAvailable = false
     memoryCache = {}
   }
 
@@ -130,8 +146,8 @@ function readTemplates() {
 }
 
 export async function hydrateTemplatesFromServer() {
-  const localData = readTemplates()
   const serverData = await fetchServerDataset()
+  const localData = readTemplates()
   const mergedData =
     isDatasetEmpty(localData)
       ? serverData
@@ -200,7 +216,11 @@ export async function clearTemplates(label = null) {
     }
 
     memoryCache = {}
-    localStorage.removeItem(STORAGE_KEY)
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      storagePersistenceAvailable = false
+    }
   }
 }
 

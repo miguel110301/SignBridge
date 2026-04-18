@@ -1,65 +1,201 @@
 import { getTemplates } from './KNNStorage.js'
+import { LM } from './HandNormalizer.js'
+import { frameModelToSequenceVector } from './HandSequenceModel.js'
 
 function euclideanDistance(v1, v2) {
   let sum = 0
-  for (let i = 0; i < v1.length; i++) {
+  for (let i = 0; i < v1.length; i += 1) {
     sum += Math.pow(v1[i] - v2[i], 2)
   }
   return Math.sqrt(sum)
 }
 
-// Umbral estricto para aceptar el molde (Distancia euclidiana máxima permisible)
-// Valores menores = mayor rigor de similitud.
-const KNN_CONFIDENCE_THRESHOLD = 0.65 
+function average(values) {
+  if (!values.length) return Infinity
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function dist2D(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+function vectorToLandmarks(vector) {
+  if (!Array.isArray(vector) || vector.length < 63) return null
+
+  const points = []
+  for (let index = 0; index < 21; index += 1) {
+    points.push({
+      x: Number(vector[index * 3]) || 0,
+      y: Number(vector[(index * 3) + 1]) || 0,
+      z: Number(vector[(index * 3) + 2]) || 0,
+    })
+  }
+  return points
+}
+
+function buildPalmPoseDescriptor(points) {
+  if (!Array.isArray(points) || points.length !== 21) return null
+
+  const descriptor = []
+  const weights = []
+  const tipIndices = [
+    LM.THUMB_TIP,
+    LM.INDEX_TIP,
+    LM.MIDDLE_TIP,
+    LM.RING_TIP,
+    LM.PINKY_TIP,
+  ]
+
+  for (const tipIndex of tipIndices) {
+    const point = points[tipIndex]
+    descriptor.push(point.x, point.y, point.z || 0)
+    weights.push(1.8, 1.8, 0.55)
+  }
+
+  for (const tipIndex of tipIndices) {
+    const point = points[tipIndex]
+    descriptor.push(Math.hypot(point.x, point.y))
+    weights.push(1.25)
+  }
+
+  descriptor.push(
+    dist2D(points[LM.THUMB_TIP], points[LM.INDEX_TIP]),
+    dist2D(points[LM.THUMB_TIP], points[LM.MIDDLE_TIP]),
+    Math.abs(points[LM.INDEX_TIP].x - points[LM.MIDDLE_TIP].x),
+    Math.abs(points[LM.MIDDLE_TIP].x - points[LM.RING_TIP].x),
+  )
+  weights.push(1.55, 1.1, 1.2, 1.2)
+
+  descriptor.push(
+    points[LM.THUMB_MCP].y - points[LM.THUMB_TIP].y,
+    points[LM.INDEX_MCP].y - points[LM.INDEX_TIP].y,
+    points[LM.MIDDLE_MCP].y - points[LM.MIDDLE_TIP].y,
+    points[LM.RING_MCP].y - points[LM.RING_TIP].y,
+    points[LM.PINKY_MCP].y - points[LM.PINKY_TIP].y,
+  )
+  weights.push(1, 1.1, 1.1, 1.1, 1.1)
+
+  return { descriptor, weights }
+}
+
+function weightedDescriptorDistance(a, b, weights) {
+  let weightedSum = 0
+  let totalWeight = 0
+
+  for (let index = 0; index < a.length; index += 1) {
+    const weight = weights[index] ?? 1
+    const delta = a[index] - b[index]
+    weightedSum += weight * delta * delta
+    totalWeight += weight
+  }
+
+  return Math.sqrt(weightedSum / (totalWeight || 1))
+}
+
+// Distancia RMS media por feature del descriptor palm-relative.
+// Es mucho más estable con pocos ejemplos que los 63 landmarks crudos.
+const KNN_CONFIDENCE_THRESHOLD = 0.28
+const STATIC_LABEL_NEIGHBORS = 2
+const KNN_MIN_CONFIDENCE = 0.42
+const KNN_MIN_MARGIN = 0.08
+const KNN_MIN_DISTANCE_SEPARATION = 0.02
 
 export function classifyKNN(canonicalLandmarks) {
   if (!canonicalLandmarks || canonicalLandmarks.length !== 21) return null
 
+  const inputPose = buildPalmPoseDescriptor(canonicalLandmarks)
+  if (!inputPose) return null
+
   const dataset = getTemplates()
-  const letters = Object.keys(dataset)
-  
-  let totalTemplates = 0
-  for(const l of letters) totalTemplates += dataset[l].length
+  const labels = Object.keys(dataset)
+  if (!labels.length) return null
 
-  if (totalTemplates === 0) return null
+  const perLabelStats = []
 
-  const inputVector = canonicalLandmarks.flatMap(p => [p.x, p.y, p.z || 0])
+  for (const label of labels) {
+    const distances = []
 
-  let bestMatch = null
-  let minDistance = Infinity
-
-  // K-Nearest Neighbors (K = 1, buscamos el vecino idéntico más cercano absoluto)
-  for (const letter of letters) {
-    const templates = dataset[letter]
-    for (const template of templates) {
+    for (const template of dataset[label] ?? []) {
       if (template.type === 'sequence' || !template.vector) continue
 
-      const dist = euclideanDistance(inputVector, template.vector)
-      if (dist < minDistance) {
-        minDistance = dist
-        bestMatch = letter
-      }
+      const templateLandmarks = vectorToLandmarks(template.vector)
+      const templatePose = buildPalmPoseDescriptor(templateLandmarks)
+      if (!templatePose) continue
+
+      distances.push(
+        weightedDescriptorDistance(
+          inputPose.descriptor,
+          templatePose.descriptor,
+          inputPose.weights,
+        )
+      )
     }
+
+    if (!distances.length) continue
+
+    distances.sort((a, b) => a - b)
+    const k = Math.min(STATIC_LABEL_NEIGHBORS, distances.length)
+    const avgDistance = average(distances.slice(0, k))
+    const bestDistance = distances[0]
+    const sampleCount = distances.length
+    const supportBonus = sampleCount >= 4 ? 0.04 : sampleCount >= 2 ? 0.02 : 0
+
+    perLabelStats.push({
+      letter: label,
+      sampleCount,
+      k,
+      bestDistance,
+      avgDistance,
+      confidence: Math.min(
+        0.99,
+        Math.max(0, 1 - (avgDistance / KNN_CONFIDENCE_THRESHOLD)) + supportBonus
+      ),
+    })
   }
 
-  if (!bestMatch) return null
+  if (!perLabelStats.length) return null
 
-  // Convertir la distancia a un pseudo-porcentaje de confianza (0.0 a 1.0)
-  const confidence = Math.max(0, 1 - (minDistance / KNN_CONFIDENCE_THRESHOLD))
+  const topCandidates = perLabelStats
+    .filter((entry) => entry.confidence >= 0.24)
+    .sort((a, b) => {
+      if (b.confidence !== a.confidence) return b.confidence - a.confidence
+      return a.avgDistance - b.avgDistance
+    })
+    .slice(0, 5)
 
-  // Solo devolver si la confianza es suficientemente buena para ignorar la heurística base
-  if (confidence < 0.4) {
-    return null 
+  if (!topCandidates.length) return null
+
+  const bestCandidate = topCandidates[0]
+  const secondCandidate = topCandidates[1] ?? null
+  const margin = secondCandidate
+    ? bestCandidate.confidence - secondCandidate.confidence
+    : bestCandidate.confidence
+  const distanceSeparation = secondCandidate
+    ? secondCandidate.avgDistance - bestCandidate.avgDistance
+    : bestCandidate.avgDistance
+
+  if (bestCandidate.confidence < KNN_MIN_CONFIDENCE) {
+    return null
+  }
+
+  if (
+    secondCandidate &&
+    margin < KNN_MIN_MARGIN &&
+    distanceSeparation < KNN_MIN_DISTANCE_SEPARATION
+  ) {
+    return null
   }
 
   return {
     bestCandidate: {
-      letter: bestMatch,
-      confidence: confidence
+      letter: bestCandidate.letter,
+      confidence: bestCandidate.confidence,
     },
-    topCandidates: [{ letter: bestMatch, confidence }],
-    method: 'knn',
-    minDistance
+    topCandidates,
+    method: 'knn_palm',
+    minDistance: bestCandidate.avgDistance,
+    margin,
+    distanceSeparation,
   }
 }
 
@@ -87,21 +223,7 @@ function dtwDistance(seq1, seq2) {
 }
 
 function extractSequenceVector(f) {
-  let relX = 0, relY = 0
-  const face = f.faceAnchor
-  const palm = f.palmCenter
-  
-  if (face && palm) {
-    relX = (palm.x - face.center.x) / face.width
-    relY = (palm.y - face.center.y) / face.height
-  }
-  
-  // Extraemos la forma base
-  const shape = (f.canonical || f.features?.points)
-  const canonicalVector = shape ? shape.flatMap(p => [p.x, p.y, p.z || 0]) : Array(63).fill(0)
-  
-  // Damos más peso al movimiento relativo a la cara (multiplicador 5)
-  return [relX * 5, relY * 5, ...canonicalVector]
+  return frameModelToSequenceVector(f?.frameModel ?? f)
 }
 
 const DTW_CONFIDENCE_THRESHOLD = 0.55

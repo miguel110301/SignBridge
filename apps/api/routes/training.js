@@ -218,7 +218,7 @@ router.delete('/:label/:sampleId', async (req, res) => {
       return res.status(404).json({ error: 'muestra no encontrada' })
     }
 
-    sample.deleteOne()
+    document.samples.pull(sampleId)
 
     if (document.samples.length === 0) {
       await TrainingLabelModel.deleteOne({ label })
