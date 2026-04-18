@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "translate": "Translator",
+    "practice": "Practice",
+    "training": "Training",
+    "login": "Sign in",
+    "logout": "Sign out"
+  },
+  "hero": {
+    "badge": "Digital Inclusion",
+    "title": "I speak your language too",
+    "subtitle": "SignBridge connects deaf patients with our healthcare professionals through intuitive technology, ensuring clear, empathetic, and barrier-free medical care.",
+    "cta": "Start translating",
+    "secondary_cta": "View repository"
+  },
+  "features": {
+    "live_translate": {
+      "tag": "Live translation",
+      "title": "Live Translate",
+      "desc": "Real-time Sign to Text using our Empathetic Lens AI.",
+      "cta": "Start stream"
+    },
+    "text_to_sign": {
+      "tag": "Text to sign",
+      "title": "Text to Sign",
+      "desc": "Convert typed messages into sign language avatars.",
+      "cta": "Open keyboard"
+    }
+  },
+  "values": {
+    "title": "Our values",
+    "subtitle": "It's not them who don't understand us. It's us who don't understand them.",
+    "items": [
+      {
+        "icon": "empathy",
+        "title": "Empathy first",
+        "desc": "Every feature is designed thinking about how the deaf person feels, not just how the technology works."
+      },
+      {
+        "icon": "bridge",
+        "title": "Bridge, not wall",
+        "desc": "We don't 'fix' anyone. We create a bidirectional bridge between two equally valid ways of communicating."
+      },
+      {
+        "icon": "access",
+        "title": "Universal access",
+        "desc": "No special hardware, no hidden costs. Just a phone and the willingness to communicate."
+      },
+      {
+        "icon": "voice",
+        "title": "Their voice, their choice",
+        "desc": "Every deaf person chooses how they want to be heard. Technology adapts to the person, not the other way around."
+      }
+    ]
+  },
+  "recent": {
+    "title": "Recent Connections",
+    "view_history": "View history",
+    "sign_to_text": "Sign to text",
+    "text_to_sign": "Text to sign",
+    "hours_ago": "{n} hours ago",
+    "yesterday": "Yesterday"
+  },
+  "stats": {
+    "phrases_mastered": "Phrases mastered"
+  },
+  "practice": {
+    "title": "Practice Mode",
+    "desc": "Level up your ASL fluency with personalized drills."
+  },
+  "how": {
+    "title": "How it works",
+    "steps": [
+      {
+        "icon": "🤟",
+        "title": "The deaf person signs",
+        "desc": "The camera detects 21 hand landmarks in real time. No extra hardware needed."
+      },
+      {
+        "icon": "🧠",
+        "title": "AI interprets",
+        "desc": "MediaPipe and Gemini recognize each LSM sign in milliseconds."
+      },
+      {
+        "icon": "🔊",
+        "title": "Voice is generated",
+        "desc": "The translated text becomes natural voice. The deaf person chooses which voice they want to be heard with."
+      }
+    ]
+  },
+  "sponsors": {
+    "title": "Built with"
+  },
+  "cta": {
+    "title": "It's not a camera demo.",
+    "title2": "It's a conversation that can finally happen.",
+    "desc": "The experience is optimized for mobile because that's where it truly matters: open, point, and listen.",
+    "button": "Start conversation"
+  },
+  "footer": {
+    "tagline": "Breaking communication barriers with AI.",
+    "rights": "All rights reserved."
+  }
+}

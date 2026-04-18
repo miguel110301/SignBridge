@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "translate": "Traductor",
+    "practice": "Práctica",
+    "training": "Entrenamiento",
+    "login": "Iniciar sesión",
+    "logout": "Salir"
+  },
+  "hero": {
+    "badge": "Inclusión Digital",
+    "title": "Yo también hablo tu idioma",
+    "subtitle": "SignBridge conecta a pacientes sordos con nuestros profesionales de la salud a través de tecnología intuitiva, garantizando una atención médica clara, empática y sin barreras.",
+    "cta": "Iniciar traducción",
+    "secondary_cta": "Ver repositorio"
+  },
+  "features": {
+    "live_translate": {
+      "tag": "Traducción en vivo",
+      "title": "Live Translate",
+      "desc": "Traducción en tiempo real de Señas a Texto usando nuestra IA empática.",
+      "cta": "Iniciar stream"
+    },
+    "text_to_sign": {
+      "tag": "Texto a señas",
+      "title": "Texto a Señas",
+      "desc": "Convierte mensajes escritos en avatares de lengua de señas.",
+      "cta": "Abrir teclado"
+    }
+  },
+  "values": {
+    "title": "Nuestros valores",
+    "subtitle": "No son ellos quienes no nos entienden. Somos nosotros quienes no los entendemos a ellos.",
+    "items": [
+      {
+        "icon": "empathy",
+        "title": "Empatía primero",
+        "desc": "Cada función está diseñada pensando en cómo se siente la persona sorda, no solo en cómo funciona la tecnología."
+      },
+      {
+        "icon": "bridge",
+        "title": "Puente, no muro",
+        "desc": "No 'arreglamos' a nadie. Creamos un puente bidireccional entre dos formas igualmente válidas de comunicarse."
+      },
+      {
+        "icon": "access",
+        "title": "Acceso universal",
+        "desc": "Sin hardware especial, sin costos ocultos. Solo un teléfono y la voluntad de comunicarte."
+      },
+      {
+        "icon": "voice",
+        "title": "Su voz, su elección",
+        "desc": "Cada persona sorda elige cómo quiere ser escuchada. La tecnología se adapta a la persona, no al revés."
+      }
+    ]
+  },
+  "recent": {
+    "title": "Conexiones recientes",
+    "view_history": "Ver historial",
+    "sign_to_text": "Señas a texto",
+    "text_to_sign": "Texto a señas",
+    "hours_ago": "hace {n} horas",
+    "yesterday": "Ayer"
+  },
+  "stats": {
+    "phrases_mastered": "Frases dominadas"
+  },
+  "practice": {
+    "title": "Modo Práctica",
+    "desc": "Mejora tu fluidez en LSM con ejercicios personalizados."
+  },
+  "how": {
+    "title": "Cómo funciona",
+    "steps": [
+      {
+        "icon": "🤟",
+        "title": "La persona sorda hace señas",
+        "desc": "La cámara detecta los 21 puntos de la mano en tiempo real. Sin hardware adicional."
+      },
+      {
+        "icon": "🧠",
+        "title": "La IA interpreta",
+        "desc": "MediaPipe y Gemini reconocen cada seña del LSM en milisegundos."
+      },
+      {
+        "icon": "🔊",
+        "title": "La voz se genera",
+        "desc": "El texto traducido se convierte en voz natural. La persona sorda elige con qué voz quiere ser escuchada."
+      }
+    ]
+  },
+  "sponsors": {
+    "title": "Construido con"
+  },
+  "cta": {
+    "title": "No es un demo de cámara.",
+    "title2": "Es una conversación que por fin puede ocurrir.",
+    "desc": "La experiencia está optimizada para móvil porque ahí es donde realmente importa: abrir, apuntar y escuchar.",
+    "button": "Iniciar conversación"
+  },
+  "footer": {
+    "tagline": "Rompiendo barreras de comunicación con IA.",
+    "rights": "Todos los derechos reservados."
+  }
+}

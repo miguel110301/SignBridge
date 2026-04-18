@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @layer base {
   html,
   body,
@@ -11,40 +13,60 @@
   }
 
   html {
-    background: #09090b;
     -webkit-text-size-adjust: 100%;
   }
 
+  /* Light mode (default) */
   body {
-    @apply bg-zinc-950 text-white antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    @apply bg-neutral-50 text-zinc-900 antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     overflow-x: hidden;
     overscroll-behavior-y: none;
     touch-action: manipulation;
   }
+
+  /* Dark mode */
+  .dark body {
+    @apply bg-zinc-950 text-white;
+  }
+
+  .dark html {
+    background: #09090b;
+  }
 }
 
 @layer components {
-  /* Barra de confianza animada */
   .confidence-bar {
     @apply h-2 rounded-full transition-all duration-150;
   }
 
-  /* Botón primario */
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-medium
-           px-6 py-3 rounded-xl transition-all active:scale-95;
+    @apply bg-brand-600 hover:bg-brand-700 text-white font-semibold
+           px-6 py-3 rounded-2xl transition-all active:scale-95 shadow-lg shadow-brand-600/25;
   }
 
-  /* Burbuja del chat — lado de señas (usuario sordo) */
+  .btn-secondary {
+    @apply bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 font-medium
+           px-6 py-3 rounded-2xl transition-all active:scale-95;
+  }
+
+  .btn-outlined {
+    @apply border-2 border-zinc-300 dark:border-zinc-600 text-zinc-800 dark:text-zinc-200 font-medium
+           px-6 py-3 rounded-2xl transition-all active:scale-95 hover:border-brand-500 hover:text-brand-600;
+  }
+
   .bubble-sign {
     @apply bg-brand-500 text-white px-4 py-2 rounded-2xl rounded-bl-sm
            max-w-xs self-start text-sm;
   }
 
-  /* Burbuja del chat — lado de voz (persona oyente) */
   .bubble-voice {
-    @apply bg-zinc-700 text-white px-4 py-2 rounded-2xl rounded-br-sm
+    @apply bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white px-4 py-2 rounded-2xl rounded-br-sm
            max-w-xs self-end text-sm;
+  }
+
+  .card {
+    @apply rounded-3xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900/80
+           shadow-sm dark:shadow-[0_10px_30px_rgba(0,0,0,0.22)] transition-all;
   }
 }

@@ -9,7 +9,7 @@
     "badge": "Tecnología inclusiva para la salud",
     "title": "Yo también hablo",
     "titleHighlight": "tu idioma",
-    "description": "SignBridge conecta a pacientes sordos con nuestros profesionales de la salud en el Hospital Moscati a través de tecnología intuitiva, garantizando una atención médica clara, empática y sin barreras.",
+    "description": "SignBridge conecta a pacientes sordos con nuestros profesionales de la salud a través de tecnología intuitiva, garantizando una atención médica clara, empática y sin barreras.",
     "feature1": "Traducción de lengua de señas en tiempo real",
     "feature2": "Comunicación bidireccional paciente-médico",
     "feature3": "Asistente de IA para consultas médicas",
@@ -95,7 +95,7 @@
       {
         "quote": "SignBridge ha transformado la forma en que atiendo a mis pacientes sordos. La comunicación ahora es fluida y empática.",
         "name": "Dra. María González",
-        "role": "Médica General - Hospital Moscati",
+        "role": "Médica General ",
         "initials": "MG",
         "avatar": 1
       },
@@ -109,7 +109,7 @@
       {
         "quote": "La precisión de la detección de señas es impresionante. Facilita enormemente nuestro trabajo diario.",
         "name": "Dr. Carlos Ruiz",
-        "role": "Especialista - Hospital Moscati",
+        "role": "Especialista",
         "initials": "CR",
         "avatar": 3
       },
