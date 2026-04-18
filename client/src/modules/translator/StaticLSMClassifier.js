@@ -234,6 +234,9 @@ function getCoreCandidates(features) {
       fingerChecks(features, { T: 1, I: 1, M: 1, R: 0, P: 0 }),
       [
         check('crossed_IM false', scoreBoolean(features.crossed_IM, false), 2.6, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
+        check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
+        check('direccion T up', scoreDirection(worldDir(features, 'T'), 'up'), 1.8, true),
         check('gap_IM > 0.14', scoreGreaterThan(features.gap_IM, 0.14), 2.2, true),
         check('thumb arriba de index_mcp', scoreGreaterThan(thumbTip.y - indexMcp.y, 0.03), 2.6, true),
         check('thumb_role between', scoreRole(features.thumb_role, 'between'), 2, true),
@@ -293,7 +296,7 @@ function getCoreCandidates(features) {
         check('direccion I down', scoreDirection(worldDir(features, 'I'), 'down'), 2.2, true),
         check('direccion M down', scoreDirection(worldDir(features, 'M'), 'down'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.8),
-        check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
+        check('palma hacia abajo', scoreBoolean(features.palm_orientation, 'down'), 1.8),
       ],
       curlChecks(features, { I: 'down', M: 'down', R: 'curled', P: 'curled' })
     ),
@@ -304,7 +307,7 @@ function getCoreCandidates(features) {
         check('direccion I down', scoreDirection(worldDir(features, 'I'), 'down'), 2.2, true),
         check('direccion T down', scoreDirection(worldDir(features, 'T'), 'down'), 2, true),
         check('pinch_TI medio', scoreRange(features.pinch_TI, 0.15, 0.35, 0.12), 1.2),
-        check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
+        check('palma hacia abajo', scoreBoolean(features.palm_orientation, 'down'), 1.8),
       ],
       curlChecks(features, { I: 'down', M: 'curled', R: 'curled', P: 'curled' })
     ),
@@ -313,6 +316,8 @@ function getCoreCandidates(features) {
       fingerChecks(features, { T: 0, I: 1, M: 1, R: 0, P: 0 }),
       [
         check('crossed_IM true', scoreBoolean(features.crossed_IM, true), 3.4, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
+        check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM < 0.14', scoreLessThan(features.gap_IM, 0.14), 1.4),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })
@@ -339,6 +344,8 @@ function getCoreCandidates(features) {
       fingerChecks(features, { T: 0, I: 1, M: 1, R: 0, P: 0 }),
       [
         check('crossed_IM false', scoreBoolean(features.crossed_IM, false), 3.2, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
+        check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM < 0.10', scoreLessThan(features.gap_IM, 0.1), 3.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })
@@ -348,6 +355,8 @@ function getCoreCandidates(features) {
       fingerChecks(features, { T: 0, I: 1, M: 1, R: 0, P: 0 }),
       [
         check('crossed_IM false', scoreBoolean(features.crossed_IM, false), 3.2, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.1, true),
+        check('direccion M up', scoreDirection(worldDir(features, 'M'), 'up'), 2.1, true),
         check('gap_IM > 0.18', scoreGreaterThan(features.gap_IM, 0.18), 3.2, true),
       ],
       curlChecks(features, { I: 'up', M: 'up', R: 'curled', P: 'curled' })

@@ -75,6 +75,22 @@ function classifyCameraDirection(direction) {
   return direction.y <= 0 ? 'up' : 'down'
 }
 
+function classifyPalmOrientation(normal) {
+  const absX = Math.abs(normal.x)
+  const absY = Math.abs(normal.y)
+  const absZ = Math.abs(normal.z)
+
+  if (absZ >= absX && absZ >= absY) {
+    return normal.z > 0 ? 'back' : 'front'
+  }
+
+  if (absY >= absX) {
+    return normal.y > 0 ? 'down' : 'up'
+  }
+
+  return normal.x > 0 ? 'side_right' : 'side_left'
+}
+
 function scoreFingerState({ mcp, pip, dip, tip }) {
   const direct = dist(mcp, tip)
   const path =
@@ -127,19 +143,7 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     const wPinky = worldLandmarks[LM.PINKY_MCP]
     const rawNormal = cross(vec(wWrist, wIndex), vec(wWrist, wPinky))
     palmNormal = normalize3D(rawNormal)
-    
-    // Determinar orientación dominante
-    const zDir = palmNormal.z
-    const yDir = palmNormal.y
-    const xDir = palmNormal.x
-    
-    if (Math.abs(yDir) > 0.6) {
-      palmOrientation = yDir > 0 ? 'down' : 'up'
-    } else if (Math.abs(xDir) > 0.6) {
-      palmOrientation = xDir > 0 ? 'side_right' : 'side_left'
-    } else {
-      palmOrientation = zDir > 0 ? 'back' : 'front'
-    }
+    palmOrientation = classifyPalmOrientation(palmNormal)
   }
 
   const thumb = {

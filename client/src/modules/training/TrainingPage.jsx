@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { extractHandFeatures } from '../translator/HandFeatureExtractor.js'
+import { assessHandDetectionQuality } from '../translator/SignClassifier.js'
 import {
   saveTemplate,
   getTemplates,
@@ -12,6 +13,52 @@ import { requestCameraStream, stopCameraStream } from '../../utils/cameraStream.
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 const DYNAMIC_GESTURES = ['hola']
+
+function formatQualityStatus(status) {
+  if (status === 'good') return 'verde'
+  if (status === 'fair') return 'amarillo'
+  return 'rojo'
+}
+
+function formatQualityReason(reason) {
+  switch (reason) {
+    case 'mano_recortada':
+      return 'mano recortada'
+    case 'mano_pequena':
+      return 'mano lejana'
+    case 'poco_ancho':
+      return 'mano angosta'
+    case 'poco_alto':
+      return 'mano baja'
+    case 'landmarks_inestables':
+      return 'landmarks inestables'
+    case 'sin_landmarks':
+      return 'sin landmarks'
+    default:
+      return reason
+  }
+}
+
+function getHandQualityStroke(handQuality) {
+  if (!handQuality || handQuality.status === 'poor') {
+    return {
+      stroke: 'rgba(239, 68, 68, 0.95)',
+      fill: 'rgba(239, 68, 68, 0.08)',
+    }
+  }
+
+  if (handQuality.status === 'fair') {
+    return {
+      stroke: 'rgba(245, 158, 11, 0.95)',
+      fill: 'rgba(245, 158, 11, 0.08)',
+    }
+  }
+
+  return {
+    stroke: 'rgba(34, 197, 94, 0.95)',
+    fill: 'rgba(34, 197, 94, 0.08)',
+  }
+}
 
 export default function TrainingPage() {
   const videoRef = useRef(null)
@@ -25,6 +72,7 @@ export default function TrainingPage() {
   
   // Real-time
   const [currentCanonical, setCurrentCanonical] = useState(null)
+  const [handQuality, setHandQuality] = useState(null)
   
   // Recording
   const [isRecording, setIsRecording] = useState(false)
@@ -36,6 +84,8 @@ export default function TrainingPage() {
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     const worldLandmarks = frameMeta.handWorldLandmarks
     const features = extractHandFeatures(landmarks, worldLandmarks)
+    const quality = assessHandDetectionQuality(landmarks)
+    setHandQuality(quality)
     
     if (features) {
       setCurrentCanonical(features.points)
@@ -50,10 +100,10 @@ export default function TrainingPage() {
         })
       }
       
-      drawFeatures(landmarks, frameMeta.faceAnchor, canvasRef.current, videoRef.current)
+      drawFeatures(landmarks, frameMeta.faceAnchor, quality, canvasRef.current, videoRef.current)
     } else {
       setCurrentCanonical(null)
-      drawFeatures(null, frameMeta.faceAnchor, canvasRef.current, videoRef.current)
+      drawFeatures(null, frameMeta.faceAnchor, quality, canvasRef.current, videoRef.current)
     }
   }, [isRecording])
 
@@ -210,6 +260,17 @@ export default function TrainingPage() {
             Grabando...
           </div>
         )}
+        <div className="absolute left-4 top-4 z-20 max-w-xs rounded-2xl border border-white/10 bg-black/65 px-4 py-3 text-xs text-white backdrop-blur-xl">
+          <p className="font-semibold uppercase tracking-[0.2em] text-cyan-200">Calidad mano</p>
+          <p className="mt-2 font-mono">
+            caja:{formatQualityStatus(handQuality?.status)} usable:{handQuality?.reliable ? '1' : '0'} score:{handQuality?.qualityScore?.toFixed(2) ?? '—'}
+          </p>
+          <p className="mt-1 text-zinc-300">
+            {handQuality?.reasons?.length
+              ? handQuality.reasons.map(formatQualityReason).join(', ')
+              : 'mano estable y lista para capturar'}
+          </p>
+        </div>
       </div>
 
       {/* Controles de Entrenamiento */}
@@ -271,9 +332,9 @@ export default function TrainingPage() {
         <div className="space-y-3">
           <button
             onClick={handleCapture}
-            disabled={(!currentCanonical && mode === 'static') || isRecording}
+            disabled={((!currentCanonical || !handQuality?.reliable) && mode === 'static') || isRecording}
             className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2
-              ${((currentCanonical || mode === 'dynamic') && !isRecording)
+              ${(((currentCanonical && handQuality?.reliable) || mode === 'dynamic') && !isRecording)
                 ? (mode === 'static' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-brand-600 hover:bg-brand-500 text-white')
                 : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
               }`}
@@ -333,7 +394,7 @@ function updateCanvasProjection(canvas, video) {
   return { renderWidth, renderHeight, offsetX, offsetY }
 }
 
-function drawFeatures(landmarks, faceAnchor, canvas, video) {
+function drawFeatures(landmarks, faceAnchor, handQuality, canvas, video) {
   if (!canvas || !video) return
   const ctx = canvas.getContext('2d')
   const proj = updateCanvasProjection(canvas, video)
@@ -356,6 +417,20 @@ function drawFeatures(landmarks, faceAnchor, canvas, video) {
 
   // draw hand
   if (landmarks) {
+      if (handQuality?.bbox) {
+        const qualityStroke = getHandQualityStroke(handQuality)
+        const left = proj.offsetX + (handQuality.bbox.minX * proj.renderWidth)
+        const top = proj.offsetY + (handQuality.bbox.minY * proj.renderHeight)
+        const boxWidth = handQuality.bbox.width * proj.renderWidth
+        const boxHeight = handQuality.bbox.height * proj.renderHeight
+
+        ctx.fillStyle = qualityStroke.fill
+        ctx.strokeStyle = qualityStroke.stroke
+        ctx.lineWidth = 2
+        ctx.fillRect(left, top, boxWidth, boxHeight)
+        ctx.strokeRect(left, top, boxWidth, boxHeight)
+      }
+
       ctx.fillStyle = '#10b981' // emerald
       landmarks.forEach(l => {
         const x = proj.offsetX + (l.x * proj.renderWidth)
