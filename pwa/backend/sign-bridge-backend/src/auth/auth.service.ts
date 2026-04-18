@@ -102,7 +102,7 @@ export class AuthService {
       },
       secret,
       {
-        expiresIn: '7d',
+        expiresIn: '30m',
       },
     );
   }

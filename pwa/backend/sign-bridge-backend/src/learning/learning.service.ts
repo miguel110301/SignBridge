@@ -61,17 +61,21 @@ export class LearningService {
     );
 
     return modules.map((learningModule) => {
-      const missions: ModuleMissionView[] = learningModule.missions.map((mission) => ({
-        id: mission.id,
-        title: mission.title,
-        description: mission.description,
-        xpReward: mission.xpReward,
-        displayOrder: mission.displayOrder,
-        completed: completedMissionIds.has(mission.id),
-      }));
+      const missions: ModuleMissionView[] = learningModule.missions.map(
+        (mission) => ({
+          id: mission.id,
+          title: mission.title,
+          description: mission.description,
+          xpReward: mission.xpReward,
+          displayOrder: mission.displayOrder,
+          completed: completedMissionIds.has(mission.id),
+        }),
+      );
 
       const totalMissions = missions.length;
-      const completedCount = missions.filter((mission) => mission.completed).length;
+      const completedCount = missions.filter(
+        (mission) => mission.completed,
+      ).length;
 
       return {
         id: learningModule.id,
@@ -80,7 +84,10 @@ export class LearningService {
         displayOrder: learningModule.displayOrder,
         totalMissions,
         completedMissions: completedCount,
-        completionRate: totalMissions > 0 ? Math.round((completedCount / totalMissions) * 100) : 0,
+        completionRate:
+          totalMissions > 0
+            ? Math.round((completedCount / totalMissions) * 100)
+            : 0,
         missions,
       };
     });
@@ -204,7 +211,9 @@ export class LearningService {
       completedMissions,
       totalMissions,
       completionRate:
-        totalMissions > 0 ? Math.round((completedMissions / totalMissions) * 100) : 0,
+        totalMissions > 0
+          ? Math.round((completedMissions / totalMissions) * 100)
+          : 0,
     };
   }
 }

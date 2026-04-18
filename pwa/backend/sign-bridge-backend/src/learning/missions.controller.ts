@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { Throttle, minutes } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LearningService } from './learning.service';
 
@@ -23,6 +24,7 @@ type AuthenticatedRequest = Request & {
 export class MissionsController {
   constructor(private readonly learningService: LearningService) {}
 
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @Post(':missionId/complete')
   async completeMission(
     @Param('missionId', new ParseUUIDPipe()) missionId: string,
