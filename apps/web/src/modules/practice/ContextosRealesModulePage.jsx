@@ -5,6 +5,11 @@ import HandDetector from '../translator/HandDetector.jsx'
 import MaxWidthWrapper from './components/MaxWidthWrapper.jsx'
 import { completePracticeMission, fetchPracticeModules } from './practiceClient.js'
 import { isContextosRealesModuleTitle } from './moduleRoutes.js'
+import {
+  formatPracticeDetection,
+  matchesPracticeObjective,
+  resolvePracticeObjective,
+} from './practiceObjective.js'
 
 function resolveContextosRealesModule(modules) {
   return (
@@ -20,13 +25,6 @@ function resolveObjectiveMission(moduleItem) {
     moduleItem.missions.find((missionItem) => !missionItem.completed)
     ?? moduleItem.missions[0]
   )
-}
-
-function resolveObjectiveLetter(missionItem) {
-  const source = `${missionItem?.title || ''} ${missionItem?.description || ''}`
-  const match = source.match(/letra\s+([a-z])/i)
-
-  return match?.[1]?.toUpperCase() || 'A'
 }
 
 export default function ContextosRealesModulePage() {
@@ -82,9 +80,13 @@ export default function ContextosRealesModulePage() {
     return resolveObjectiveMission(moduleData)
   }, [moduleData])
 
-  const objectiveLetter = useMemo(() => {
-    return resolveObjectiveLetter(objectiveMission)
+  const objective = useMemo(() => {
+    return resolvePracticeObjective(objectiveMission)
   }, [objectiveMission])
+
+  const objectiveMatched = useMemo(() => {
+    return matchesPracticeObjective(detectedSign, objective)
+  }, [detectedSign, objective])
 
   async function handleCompleteObjective() {
     if (!token || !objectiveMission?.id || objectiveMission.completed) return
@@ -106,7 +108,7 @@ export default function ContextosRealesModulePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+      <div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
         <div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
           Cargando modulo...
         </div>
@@ -116,7 +118,7 @@ export default function ContextosRealesModulePage() {
 
   if (error) {
     return (
-      <div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+      <div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
         <div className="max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-6">
           <p className="text-sm text-red-100">{error}</p>
           <button
@@ -133,7 +135,7 @@ export default function ContextosRealesModulePage() {
 
   if (!moduleData) {
     return (
-      <div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+      <div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
         <div className="max-w-xl rounded-2xl border border-[#1c2740] bg-[#0a1324] p-6">
           <p className="text-sm text-[#9db0d2]">
             No encontramos el modulo Contextos Reales en este momento.
@@ -153,7 +155,7 @@ export default function ContextosRealesModulePage() {
   const isSaving = objectiveMission?.id && completingMissionId === objectiveMission.id
 
   return (
-    <div className="min-h-[calc(100vh-65px)] bg-[#030712] text-white">
+    <div className="min-h-[calc(100dvh-65px)] bg-[#030712] text-white">
       <MaxWidthWrapper className="py-9 sm:py-12">
         <Link
           to="/practica"
@@ -175,7 +177,7 @@ export default function ContextosRealesModulePage() {
               Camara
             </p>
             <div className="mt-4">
-              <HandDetector onSignDetected={(letter) => setDetectedSign(letter)} />
+              <HandDetector onSignDetected={setDetectedSign} />
             </div>
           </div>
 
@@ -186,10 +188,14 @@ export default function ContextosRealesModulePage() {
 
             <div className="mt-4 rounded-2xl border border-[#172540] bg-[#081224] p-5">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[#7f93b4]">
-                Letra objetivo
+                {objective.title}
               </p>
-              <p className="mt-2 text-[4.1rem] font-semibold leading-none text-white">
-                {objectiveLetter}
+              <p className={`mt-2 font-semibold text-white ${
+                objective.type === 'letter'
+                  ? 'text-[4.1rem] leading-none'
+                  : 'text-2xl leading-tight sm:text-3xl'
+              }`}>
+                {objective.display}
               </p>
               <p className="mt-3 text-[1.02rem] font-medium text-white">
                 {objectiveMission?.title || 'Sin objetivo configurado.'}
@@ -200,8 +206,20 @@ export default function ContextosRealesModulePage() {
             </div>
 
             <p className="mt-4 text-sm text-[#9fb0d8]">
-              Senia detectada: <span className="font-semibold text-white">{detectedSign || '---'}</span>
+              Deteccion actual: <span className="font-semibold text-white">{formatPracticeDetection(detectedSign)}</span>
             </p>
+
+            {objectiveMatched && (
+              <p className="mt-2 rounded-md border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                La deteccion coincide con el objetivo actual.
+              </p>
+            )}
+
+            {!objective.supported && (
+              <p className="mt-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-[#9db0d2]">
+                La validacion automatica de practica esta disponible por ahora para letras estaticas y el gesto HOLA.
+              </p>
+            )}
 
             {actionError ? (
               <p className="mt-4 rounded-md border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-100">

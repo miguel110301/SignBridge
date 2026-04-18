@@ -679,9 +679,6 @@ export default function TranslatorPage() {
   const requiredStabilityFrames = isCompactViewport ? 6 : LETTER_STABILITY_FRAMES
   const isVoiceToSignMode = translationMode === TRANSLATION_MODE.VOICE_TO_SIGN
   const [isSimulating, setIsSimulating] = useState(false)
-  const isSimulatingRef = useRef(false)
-  const [isStaticSimulating, setIsStaticSimulating] = useState(false)
-  const isStaticSimulatingRef = useRef(false)
 
   const setWordBuffer = useCallback((nextValue) => {
     const next =
@@ -1071,65 +1068,41 @@ export default function TranslatorPage() {
   const runSimulation = useCallback(async () => {
     if (!isActive) return
     setIsSimulating(true)
-    isSimulatingRef.current = true
     
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(1000)
-
     // 1. A
     updateDetectionDisplay('A', 0.85, 'letter')
-    await delay(1200)
     appendLetter('A')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
+    await delay(1200)
 
     // 2. B
     updateDetectionDisplay('B', 0.90, 'letter')
-    await delay(1200)
     appendLetter('B')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
+    await delay(1200)
 
     // 3. C
     updateDetectionDisplay('C', 0.88, 'letter')
-    await delay(1500)
     appendLetter('C')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
+    await delay(1500)
     
     commitWord() // append ABC
-    await delay(1000)
+    await delay(800)
 
     // 4. Hola
     updateDetectionDisplay('HOLA', 0.95, 'gesture')
-    await delay(1000)
     commitGesture({ word: 'hola', confidence: 0.95 })
-    updateDetectionDisplay(null, 0, 'letter')
-    
-    // DELAY EXTRA POR MUNDO
-    await delay(4000)
+    await delay(2000)
 
     // 5. Mundo
     updateDetectionDisplay('MUNDO', 0.92, 'gesture')
-    await delay(1000)
     commitGesture({ word: 'mundo', confidence: 0.92 })
+    await delay(2000)
+
+    // End
     updateDetectionDisplay(null, 0, 'letter')
-    await delay(1000)
-
     setIsSimulating(false)
-    isSimulatingRef.current = false
   }, [isActive, appendLetter, commitWord, commitGesture, updateDetectionDisplay])
-
-  const toggleStaticSimulation = useCallback(() => {
-    const next = !isStaticSimulating
-    setIsStaticSimulating(next)
-    isStaticSimulatingRef.current = next
-    if (next) {
-      updateDetectionDisplay(null, 0, 'letter')
-    }
-  }, [isStaticSimulating, updateDetectionDisplay])
 
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     const now = Date.now()
@@ -1145,7 +1118,7 @@ export default function TranslatorPage() {
     }
     const gestureState = gestureRecognizerRef.current.push(landmarks, enrichedFrameMeta, now)
 
-    if (isSimulatingRef.current || isStaticSimulatingRef.current) {
+    if (isSimulating) {
       updateDebugVisuals({
         landmarks,
         frameMeta: enrichedFrameMeta,
@@ -1408,7 +1381,6 @@ export default function TranslatorPage() {
 
       // Como el hook solo nos avisa cuando SI hay mano, las pausas se infieren
       // midiendo cuanto tiempo llevamos sin recibir landmarks.
-      if (isSimulatingRef.current || isStaticSimulatingRef.current) return;
       if (idleFor >= HAND_LOST_GRACE_MS) {
         resetPredictionState()
       }
@@ -1463,7 +1435,9 @@ export default function TranslatorPage() {
   const recentVoiceLines = voiceLines.slice(-3)
   const liveDecodedWord = wordBuffer ? decodeFingerSpelling(wordBuffer) : null
   const liveWordPreview = liveDecodedWord?.corrected || (wordBuffer ? normalizeWord(wordBuffer) : '')
-  const liveSubtitle = isStaticSimulating ? 'Hola, quisiera agendar una cita' : [...phraseWords, liveWordPreview].filter(Boolean).join(' ')
+  const liveSubtitle = [...phraseWords, liveWordPreview]
+    .filter(Boolean)
+    .join(' ')
   const voiceLiveSource = voiceInterim || latestVoiceTranscript || recentVoiceLines[recentVoiceLines.length - 1] || ''
   const voiceHistoryLines = [...recentVoiceLines].reverse()
   const detectionHeading = isVoiceToSignMode
@@ -1473,7 +1447,9 @@ export default function TranslatorPage() {
       : t('translator.letter_detected')
   const gestureDebug = debugSnapshot?.gestureDebug
   const currentGestureFrame = gestureDebug?.currentFrame
-  const mobileBottomOffset = '1rem'
+  const mobileBottomOffset = isCompactViewport
+    ? (isStandaloneMode ? '1rem' : '5.5rem')
+    : '1rem'
   const modeToggleLabel = isVoiceToSignMode ? 'Señas a voz' : 'Voz a señas'
   const startActionLabel = isVoiceToSignMode
     ? (isActive ? 'Pausar voz a señas' : 'Iniciar voz a señas')
@@ -2055,6 +2031,15 @@ export default function TranslatorPage() {
                   {isActive ? t('translator.pause') : t('translator.start')}
                 </button>
               </div>
+                {!isSimulating && isActive && (
+                  <button
+                    type="button"
+                    onClick={runSimulation}
+                    className="col-span-2 mt-2 rounded-xl border border-purple-400/30 bg-purple-500/10 px-3 py-2.5 text-xs font-semibold text-purple-300 transition active:scale-95"
+                  >
+                    🚀 Grabar Demo (Simulación)
+                  </button>
+                )}
             </div>
           )}
         </div>
@@ -2093,6 +2078,17 @@ export default function TranslatorPage() {
             </button>
           </div>
 
+
+          {!isSimulating && isActive && (
+            <button
+              type="button"
+              onClick={runSimulation}
+              className="absolute left-[8.5rem] z-20 rounded-2xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-300 shadow-xl backdrop-blur-xl transition hover:bg-purple-500/20 active:scale-95 sm:left-36"
+              style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
+            >
+              🚀 Simular Video
+            </button>
+          )}
 
           <button
             type="button"

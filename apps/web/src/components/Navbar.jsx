@@ -1,23 +1,17 @@
 import { NavLink } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nProvider.jsx'
 import { useAuth } from '../modules/auth/AuthProvider.jsx'
+import Logo from './Logo.jsx'
 
 export default function Navbar({ isDark, onToggleDark }) {
   const { t, lang, toggleLang } = useI18n()
   const { isAuthenticated, user, logout } = useAuth()
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-zinc-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
         {/* Logo */}
-        <NavLink to="/" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white text-sm font-bold shadow-md shadow-brand-600/30">
-            S
-          </div>
-          <span className="text-lg font-extrabold tracking-tight text-brand-600 dark:text-brand-400">
-            SignBridge
-          </span>
-        </NavLink>
+        <Logo size="md" />
 
         {/* Nav links — desktop */}
         <div className="hidden items-center gap-1 md:flex">
@@ -128,12 +122,12 @@ export default function Navbar({ isDark, onToggleDark }) {
       </div>
 
       {/* Mobile bottom nav */}
-      <div className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl md:hidden">
-        <div className="flex items-center justify-around py-2">
+      <div className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-200 dark:border-slate-800/80 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="flex items-center justify-around py-1">
           <NavLink
             to="/traductor"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
                 isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
               }`
             }
@@ -146,7 +140,7 @@ export default function Navbar({ isDark, onToggleDark }) {
           <NavLink
             to="/practica"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
                 isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
               }`
             }
@@ -159,7 +153,7 @@ export default function Navbar({ isDark, onToggleDark }) {
           <NavLink
             to="/academia"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
                 isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
               }`
             }
@@ -173,12 +167,12 @@ export default function Navbar({ isDark, onToggleDark }) {
             to="/"
             end
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
                 isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
               }`
             }
           >
-            <div className="flex h-10 w-10 -mt-5 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/40">
+            <div className="flex h-10 w-10 -mt-4 items-center justify-center rounded-full bg-gradient-to-tr from-brand-600 to-accent-500 text-white shadow-lg shadow-accent-500/30">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a2 2 0 01-2-2v-4a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2h-4z" />
               </svg>
@@ -187,7 +181,7 @@ export default function Navbar({ isDark, onToggleDark }) {
           <NavLink
             to="/entrenamiento"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
                 isActive ? 'text-accent-600 dark:text-accent-400' : 'text-zinc-500 dark:text-zinc-400'
               }`
             }
@@ -197,19 +191,32 @@ export default function Navbar({ isDark, onToggleDark }) {
             </svg>
             {t('nav.training')}
           </NavLink>
-          <NavLink
-            to="/login"
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors ${
-                isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
-              }`
-            }
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            {t('nav.login')}
-          </NavLink>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={logout}
+              className="flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 transition-colors touch-manipulation active:text-red-500"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              {t('nav.logout')}
+            </button>
+          ) : (
+            <NavLink
+              to="/login"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
+                  isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
+                }`
+              }
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              {t('nav.login')}
+            </NavLink>
+          )}
         </div>
       </div>
     </nav>

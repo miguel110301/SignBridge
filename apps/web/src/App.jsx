@@ -26,7 +26,7 @@ export default function App() {
   const { isDark, toggle: toggleDark } = useDarkMode()
 
   return (
-    <div className={isImmersiveRoute ? 'h-[100dvh] bg-black' : 'min-h-screen flex flex-col bg-neutral-50 dark:bg-zinc-950'}>
+    <div className={isImmersiveRoute ? 'h-[100dvh] bg-slate-950' : 'min-h-screen flex flex-col bg-neutral-50 dark:bg-slate-950'}>
       {!isImmersiveRoute && !isLessonRoute && (
         <Navbar isDark={isDark} onToggleDark={toggleDark} />
       )}

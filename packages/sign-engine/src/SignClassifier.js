@@ -9,22 +9,146 @@ function formatFingerBit(value) {
   return value >= 0.75 ? 1 : value >= 0.35 ? 0.5 : 0
 }
 
+function combineClassification(staticClassification, knnClassification) {
+  if (!staticClassification) return knnClassification
+  if (!knnClassification?.topCandidates?.length) return staticClassification
+
+  const staticTop = staticClassification.topCandidates ?? []
+  const rawKnnTop = knnClassification.topCandidates ?? []
+  const staticBest = staticTop[0] ?? staticClassification.bestCandidate
+  const staticMargin =
+    staticTop.length > 1
+      ? staticTop[0].confidence - staticTop[1].confidence
+      : staticTop[0]?.confidence ?? 0
+  const staticCompatibilityLetters = new Set(staticTop.slice(0, 3).map((candidate) => candidate.letter))
+  const compatibleKnnTop =
+    staticCompatibilityLetters.size > 0
+      ? rawKnnTop.filter((candidate) => staticCompatibilityLetters.has(candidate.letter))
+      : rawKnnTop
+  const strongStaticSignal =
+    Boolean(staticBest) &&
+    (
+      staticBest.confidence >= 0.8 ||
+      staticMargin >= 0.14
+    )
+
+  if (strongStaticSignal && compatibleKnnTop.length === 0) {
+    return {
+      ...staticClassification,
+      method: 'static_guarded',
+      fusion: {
+        staticWeight: 1,
+        knnWeight: 0,
+        staticMargin,
+        agreement: false,
+        knnRejectedReason: 'outside_static_top3',
+        knnScope: 'static_top3',
+      },
+    }
+  }
+
+  const knnTop = compatibleKnnTop.length > 0 ? compatibleKnnTop : rawKnnTop
+  const knnBest = knnTop[0] ?? knnClassification.bestCandidate
+
+  let staticWeight = 0.82
+  let knnWeight = 0.18
+
+  if (knnBest && staticBest?.letter === knnBest.letter) {
+    staticWeight = 0.68
+    knnWeight = 0.32
+  } else if (
+    knnBest &&
+    staticBest &&
+    staticBest.confidence < 0.84 &&
+    staticMargin < 0.14 &&
+    knnBest.confidence >= 0.72
+  ) {
+    staticWeight = 0.56
+    knnWeight = 0.44
+  } else if (staticBest && staticBest.confidence >= 0.9 && staticMargin >= 0.18) {
+    staticWeight = 0.92
+    knnWeight = 0.08
+  }
+
+  const candidateMap = new Map()
+
+  for (const candidate of staticTop.slice(0, 5)) {
+    candidateMap.set(candidate.letter, {
+      letter: candidate.letter,
+      confidence: candidate.confidence * staticWeight,
+      staticConfidence: candidate.confidence,
+      knnConfidence: 0,
+      failedRule: candidate.failedRule,
+      sources: ['vector'],
+    })
+  }
+
+  for (const candidate of knnTop.slice(0, 5)) {
+    const existing = candidateMap.get(candidate.letter)
+    if (existing) {
+      existing.confidence += candidate.confidence * knnWeight
+      existing.knnConfidence = candidate.confidence
+      existing.sources.push('dataset')
+      if (candidate.letter === staticBest?.letter) {
+        existing.confidence += 0.05
+      }
+    } else {
+      candidateMap.set(candidate.letter, {
+        letter: candidate.letter,
+        confidence: candidate.confidence * knnWeight,
+        staticConfidence: 0,
+        knnConfidence: candidate.confidence,
+        failedRule: 'dataset_only',
+        sources: ['dataset'],
+      })
+    }
+  }
+
+  const topCandidates = [...candidateMap.values()]
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 5)
+
+  const bestCandidate = topCandidates[0] ?? staticClassification.bestCandidate
+
+  return {
+    ...staticClassification,
+    method: 'hybrid',
+    bestCandidate: {
+      letter: bestCandidate.letter,
+      confidence: Math.min(bestCandidate.confidence, 0.99),
+    },
+    topCandidates: topCandidates.map((candidate) => ({
+      ...candidate,
+      confidence: Math.min(candidate.confidence, 0.99),
+    })),
+    staticTopCandidates: staticTop,
+    knnTopCandidates: knnTop,
+    fusion: {
+      staticWeight,
+      knnWeight,
+      staticMargin,
+      agreement: staticBest?.letter === knnBest?.letter,
+      knnScope: compatibleKnnTop.length > 0 ? 'static_top3' : 'all',
+    },
+  }
+}
+
 export function extractHandMetrics(landmarks, meta = {}) {
   const worldLandmarks = meta.worldLandmarks || meta.handWorldLandmarks
   const features = extractHandFeatures(landmarks, worldLandmarks)
   if (!features) return null
 
-  let classification = classifyStaticLSM(features)
-  
-  // Intervención KNN
+  const staticClassification = classifyStaticLSM(features)
   const knnResult = classifyKNN(features.points)
-  if (knnResult && knnResult.bestCandidate.confidence >= 0.70) {
-    classification = knnResult
-  }
+  const classification = combineClassification(staticClassification, knnResult)
 
   return {
     features,
     classification,
+    classifiers: {
+      static: staticClassification,
+      knn: knnResult,
+    },
     fingers: {
       thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.camera_directions.T, localDirection: features.directions.T },
       index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.camera_directions.I, localDirection: features.directions.I },
@@ -35,6 +159,8 @@ export function extractHandMetrics(landmarks, meta = {}) {
     directions: {
       camera: features.camera_directions,
       local: features.directions,
+      cameraVectors: features.camera_vectors,
+      localVectors: features.local_vectors,
     },
     pairs: {
       indexMiddle: {
@@ -64,6 +190,7 @@ export function extractHandMetrics(landmarks, meta = {}) {
       palmCenter: features.palmCenter,
       nonThumbExtendedCount: features.meta.nonThumbExtendedCount,
       nonThumbClosedCount: features.meta.nonThumbClosedCount,
+      handCount: meta.handsCount ?? 1,
     },
     orientation: {
       palmOrientation: features.palm_orientation,
@@ -164,14 +291,14 @@ export function assessHandDetectionQuality(landmarks) {
 
 export function classifySign(landmarks, meta = {}) {
   const metrics = extractHandMetrics(landmarks, meta)
-  if (!metrics || !metrics.classification.bestCandidate) return null
+  if (!metrics || !metrics.classification?.bestCandidate) return null
 
   return {
     letter: metrics.classification.bestCandidate.letter,
     confidence: metrics.classification.bestCandidate.confidence,
     candidates: metrics.classification.topCandidates,
     classifierDebug: metrics.classification,
-    secondCandidateFailure: metrics.classification.topCandidates[1]?.failedRule ?? null,
+    secondCandidateFailure: metrics.classification.topCandidates?.[1]?.failedRule ?? null,
   }
 }
 

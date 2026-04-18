@@ -92,7 +92,7 @@ export default function PracticePage() {
 
 	if (loading) {
 		return (
-			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
 				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
 					Cargando ruta de aprendizaje...
 				</div>
@@ -102,7 +102,7 @@ export default function PracticePage() {
 
 	if (error) {
 		return (
-			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
 				<div className="max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-6">
 					<p className="text-sm text-red-100">{error}</p>
 					<button
@@ -119,7 +119,7 @@ export default function PracticePage() {
 
 	if (modules.length === 0 || !activeModule) {
 		return (
-			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
 				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
 					Aun no hay modulos disponibles en la base de datos.
 				</div>
@@ -128,7 +128,7 @@ export default function PracticePage() {
 	}
 
 	return (
-		<div className="min-h-[calc(100vh-65px)] bg-[#030712] text-white">
+		<div className="min-h-[calc(100dvh-65px)] bg-[#030712] text-white">
 			<MaxWidthWrapper className="py-9 sm:py-12">
 				<div className="max-w-[1140px]">
 					<Badge>PRACTICE MODE</Badge>

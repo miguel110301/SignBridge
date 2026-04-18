@@ -36,7 +36,7 @@ async function createHandLandmarkerWithFallback(vision) {
     return await HandLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'GPU' },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands: 2,
     })
   } catch (gpuError) {
     console.warn('[HandDetection] GPU no disponible para mano, usando CPU:', gpuError)
@@ -44,7 +44,7 @@ async function createHandLandmarkerWithFallback(vision) {
     return HandLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'CPU' },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands: 2,
     })
   }
 }
@@ -162,12 +162,14 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
         }
 
         if (handResults.landmarks?.length > 0) {
+          const handsCount = handResults.landmarks.length
           const handLandmarks = handResults.landmarks[0]
           const handWorldLandmarks = handResults.worldLandmarks?.[0] ?? null
           const handedness =
             handResults.handedness?.[0]?.[0] ??
             handResults.handednesses?.[0]?.[0] ??
             null
+          const secondaryLandmarks = handsCount > 1 ? handResults.landmarks[1] : null
 
           const faceLandmarks = faceResults?.faceLandmarks?.[0] ?? null
           const faceAnchor = faceLandmarks
@@ -179,6 +181,8 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
             faceLandmarks,
             handWorldLandmarks,
             handedness,
+            handsCount,
+            secondaryLandmarks,
           })
         }
       }

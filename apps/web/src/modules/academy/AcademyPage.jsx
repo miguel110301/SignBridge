@@ -21,20 +21,25 @@ export default function AcademyPage() {
     return curriculum.map((unit, ui) => {
       let completedCount = 0
       let foundCurrent = false
+      const unitUnlocked = ui === 0 || prevUnitDone
 
       const lessons = unit.lessons.map((lesson, li) => {
         const done = progress.isLessonCompleted(unit.id, lesson.id)
         if (done) completedCount++
 
-        /* A lesson is the "current" if it's the first not-done in the first unlocked unit */
-        const isAvailable = prevUnitDone || completedCount > 0 || li === 0
+        const previousLessonId = li > 0 ? unit.lessons[li - 1]?.id : null
+        const previousLessonDone =
+          li === 0
+            ? unitUnlocked
+            : progress.isLessonCompleted(unit.id, previousLessonId)
+
         let state = 'locked'
         if (done) {
           state = 'completed'
-        } else if (!foundCurrent && isAvailable) {
+        } else if (!foundCurrent && previousLessonDone) {
           state = 'current'
           foundCurrent = true
-        } else if (isAvailable || (li > 0 && lessons?.[li - 1] && progress.isLessonCompleted(unit.id, unit.lessons[li - 1]?.id))) {
+        } else if (previousLessonDone) {
           state = 'available'
         }
 
