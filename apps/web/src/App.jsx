@@ -1,6 +1,14 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import TranslatorPage from './modules/translator/TranslatorPage.jsx'
 import PracticePage   from './modules/practice/PracticePage.jsx'
+import FundamentosLsmModulePage from './modules/practice/FundamentosLsmModulePage.jsx'
+import InteraccionesBasicasModulePage from './modules/practice/InteraccionesBasicasModulePage.jsx'
+import ContextosRealesModulePage from './modules/practice/ContextosRealesModulePage.jsx'
+import {
+  CONTEXTOS_REALES_MODULE_ROUTE,
+  FUNDAMENTALS_MODULE_ROUTE,
+  INTERACCIONES_BASICAS_MODULE_ROUTE,
+} from './modules/practice/moduleRoutes.js'
 import LandingPage    from './modules/landing/LandingPage.jsx'
 import TrainingPage   from './modules/training/TrainingPage.jsx'
 import AcademyPage    from './modules/academy/AcademyPage.jsx'
@@ -29,6 +37,9 @@ export default function App() {
           <Route path="/login"      element={<AuthPage />} />
           <Route path="/traductor"  element={<TranslatorPage />} />
           <Route path="/practica"   element={<RequireAuth><PracticePage /></RequireAuth>} />
+          <Route path={FUNDAMENTALS_MODULE_ROUTE} element={<RequireAuth><FundamentosLsmModulePage /></RequireAuth>} />
+          <Route path={INTERACCIONES_BASICAS_MODULE_ROUTE} element={<RequireAuth><InteraccionesBasicasModulePage /></RequireAuth>} />
+          <Route path={CONTEXTOS_REALES_MODULE_ROUTE} element={<RequireAuth><ContextosRealesModulePage /></RequireAuth>} />
           <Route path="/entrenamiento" element={<RequireAuth><TrainingPage /></RequireAuth>} />
           <Route path="/academia"   element={<RequireAuth><AcademyPage /></RequireAuth>} />
           <Route path="/academia/leccion/:unitId/:lessonId" element={<RequireAuth><LessonPage /></RequireAuth>} />
