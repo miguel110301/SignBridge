@@ -10,6 +10,7 @@ import {
 import { SIGN_LANGUAGE_PROFILE } from './SignMap.js'
 import { decodeFingerSpelling } from './SpellingDecoder.js'
 import { createGestureSequenceRecognizer } from './GestureSequenceRecognizer.js'
+import { requestCameraStream } from '../../utils/cameraStream.js'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -133,43 +134,7 @@ function getCameraErrorMessage(error) {
 }
 
 async function requestRearCamera() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Este navegador no soporta acceso a camara.')
-  }
-
-  const attempts = [
-    {
-      audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 720 },
-        height: { ideal: 1280 },
-        aspectRatio: { ideal: 9 / 16 },
-      },
-    },
-    {
-      audio: false,
-      video: {
-        facingMode: 'environment',
-      },
-    },
-    {
-      audio: false,
-      video: true,
-    },
-  ]
-
-  let lastError = null
-
-  for (const constraints of attempts) {
-    try {
-      return await navigator.mediaDevices.getUserMedia(constraints)
-    } catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError || new Error('No se pudo iniciar la camara.')
+  return requestCameraStream({ preferredFacingMode: 'environment' })
 }
 
 function clearDebugCanvas(canvas) {
@@ -233,7 +198,9 @@ function createCanvasProjection(canvas, video) {
 
   const sourceWidth = video?.videoWidth || width
   const sourceHeight = video?.videoHeight || height
-  const scale = Math.max(width / sourceWidth, height / sourceHeight)
+  // Igual que en Entrenamiento: no recortamos el video para que
+  // el preview corresponda al encuadre real que ve MediaPipe.
+  const scale = Math.min(width / sourceWidth, height / sourceHeight)
   const renderWidth = sourceWidth * scale
   const renderHeight = sourceHeight * scale
   const offsetX = (width - renderWidth) / 2
@@ -918,7 +885,7 @@ export default function TranslatorPage() {
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     const now = Date.now()
     const handedness = getHandednessLabel(frameMeta.handedness)
-    const handMetrics = extractHandMetrics(landmarks, { handedness })
+    const handMetrics = extractHandMetrics(landmarks, { handedness, worldLandmarks: frameMeta.handWorldLandmarks })
     const handQuality = assessHandDetectionQuality(landmarks)
     const staticPose = pushStaticPoseSample(staticPoseHistoryRef, landmarks, now)
     const enrichedFrameMeta = {
@@ -1191,7 +1158,7 @@ export default function TranslatorPage() {
     <section className="relative h-full min-h-[100dvh] overflow-hidden bg-black">
       <video
         ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
           cameraReady ? 'opacity-100' : 'opacity-0'
         }`}
         style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}

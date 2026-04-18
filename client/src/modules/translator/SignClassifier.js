@@ -1,5 +1,6 @@
 import { extractHandFeatures } from './HandFeatureExtractor.js'
 import { classifyStaticLSM } from './StaticLSMClassifier.js'
+import { classifyKNN } from '../training/KNNClassifier.js'
 
 const HAND_QUALITY_EDGE_MARGIN = 0.04
 const SMOOTHER_MIN_RATIO = 0.7
@@ -8,11 +9,18 @@ function formatFingerBit(value) {
   return value >= 0.75 ? 1 : value >= 0.35 ? 0.5 : 0
 }
 
-export function extractHandMetrics(landmarks) {
-  const features = extractHandFeatures(landmarks)
+export function extractHandMetrics(landmarks, meta = {}) {
+  const worldLandmarks = meta.worldLandmarks || meta.handWorldLandmarks
+  const features = extractHandFeatures(landmarks, worldLandmarks)
   if (!features) return null
 
-  const classification = classifyStaticLSM(features)
+  let classification = classifyStaticLSM(features)
+  
+  // Intervención KNN
+  const knnResult = classifyKNN(features.points)
+  if (knnResult && knnResult.bestCandidate.confidence >= 0.70) {
+    classification = knnResult
+  }
 
   return {
     features,
@@ -52,8 +60,8 @@ export function extractHandMetrics(landmarks) {
   }
 }
 
-export function debugFingers(landmarks) {
-  const metrics = extractHandMetrics(landmarks)
+export function debugFingers(landmarks, meta = {}) {
+  const metrics = extractHandMetrics(landmarks, meta)
   if (!metrics) return 'T:- I:- M:- R:- P:- gap:-'
 
   const { features } = metrics
@@ -64,6 +72,7 @@ export function debugFingers(landmarks) {
     `R:${formatFingerBit(features.fingers.R)}`,
     `P:${formatFingerBit(features.fingers.P)}`,
     `gap:${features.gap_IM.toFixed(2)}`,
+    `orien:${features.palm_orientation}`,
   ].join(' ')
 }
 
@@ -140,19 +149,16 @@ export function assessHandDetectionQuality(landmarks) {
   }
 }
 
-export function classifySign(landmarks) {
-  const features = extractHandFeatures(landmarks)
-  if (!features) return null
-
-  const classification = classifyStaticLSM(features)
-  if (!classification.bestCandidate) return null
+export function classifySign(landmarks, meta = {}) {
+  const metrics = extractHandMetrics(landmarks, meta)
+  if (!metrics || !metrics.classification.bestCandidate) return null
 
   return {
-    letter: classification.bestCandidate.letter,
-    confidence: classification.bestCandidate.confidence,
-    candidates: classification.topCandidates,
-    classifierDebug: classification,
-    secondCandidateFailure: classification.topCandidates[1]?.failedRule ?? null,
+    letter: metrics.classification.bestCandidate.letter,
+    confidence: metrics.classification.bestCandidate.confidence,
+    candidates: metrics.classification.topCandidates,
+    classifierDebug: metrics.classification,
+    secondCandidateFailure: metrics.classification.topCandidates[1]?.failedRule ?? null,
   }
 }
 

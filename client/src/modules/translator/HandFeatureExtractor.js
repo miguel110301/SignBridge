@@ -1,5 +1,13 @@
 import { LM, getPalmCenter, normalizeHand } from './HandNormalizer.js'
 
+function cross(v1, v2) {
+  return {
+    x: (v1.y * v2.z) - (v1.z * v2.y),
+    y: (v1.z * v2.x) - (v1.x * v2.z),
+    z: (v1.x * v2.y) - (v1.y * v2.x),
+  }
+}
+
 function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
@@ -75,9 +83,36 @@ function buildFingerBundle(points, indices) {
   }
 }
 
-export function extractHandFeatures(landmarks) {
-  const canonical = normalizeHand(landmarks)
+export function extractHandFeatures(landmarks, worldLandmarks) {
+  const sourceMarks = worldLandmarks?.length === 21 ? worldLandmarks : landmarks
+  const canonical = normalizeHand(sourceMarks)
   if (!canonical) return null
+  
+  let palmOrientation = 'front'
+  let palmNormal = { x: 0, y: 0, z: -1 }
+  
+  if (worldLandmarks?.length === 21) {
+    const wWrist = worldLandmarks[LM.WRIST]
+    const wIndex = worldLandmarks[LM.INDEX_MCP]
+    const wPinky = worldLandmarks[LM.PINKY_MCP]
+    const rawNormal = cross(vec(wWrist, wIndex), vec(wWrist, wPinky))
+    const length = magnitude({ x: rawNormal.x, y: rawNormal.y }) || 1 // crude normalize
+    const m = Math.hypot(rawNormal.x, rawNormal.y, rawNormal.z) || 1
+    palmNormal = { x: rawNormal.x / m, y: rawNormal.y / m, z: rawNormal.z / m }
+    
+    // Determinar orientación dominante
+    const zDir = palmNormal.z
+    const yDir = palmNormal.y
+    const xDir = palmNormal.x
+    
+    if (Math.abs(yDir) > 0.6) {
+      palmOrientation = yDir > 0 ? 'down' : 'up'
+    } else if (Math.abs(xDir) > 0.6) {
+      palmOrientation = xDir > 0 ? 'side_right' : 'side_left'
+    } else {
+      palmOrientation = zDir > 0 ? 'back' : 'front'
+    }
+  }
 
   const thumb = {
     mcp: canonical[LM.THUMB_MCP],
@@ -162,5 +197,7 @@ export function extractHandFeatures(landmarks) {
       thumb_tip_above_middle_mcp: thumb.tip.y > middle.mcp.y,
       thumb_centered: thumbCentered,
     },
+    palm_normal: palmNormal,
+    palm_orientation: palmOrientation,
   }
 }

@@ -1,4 +1,6 @@
 import { DYNAMIC_GESTURE_MAP } from './SignMap.js'
+import { classifyDTW } from '../training/KNNClassifier.js'
+import { normalizeHand } from './HandNormalizer.js'
 
 const LM = {
   WRIST: 0,
@@ -134,6 +136,7 @@ function summarizeFrame(landmarks, frameMeta, timestamp, config) {
     fingerGap,
     palmFacingScore,
     palmFacingCamera,
+    canonical: normalizeHand(frameMeta?.handWorldLandmarks || landmarks)
   }
 }
 
@@ -267,6 +270,23 @@ export function createGestureSequenceRecognizer() {
           gesture: null,
           suppressStatic,
           debug: buildDebugState(frameSummary, history, suppressStatic, null),
+        }
+      }
+
+      const dtwResult = classifyDTW(history)
+      if (dtwResult && dtwResult.confidence > 0.6) {
+        const historySnapshot = history.slice()
+        lastGestureAt = timestamp
+        history.length = 0
+        return {
+          gesture: {
+            gesture: dtwResult.gesture,
+            word: dtwResult.gesture,
+            confidence: dtwResult.confidence,
+            debug: { method: 'dtw', minDistance: dtwResult.minDistance }
+          },
+          suppressStatic: true,
+          debug: buildDebugState(frameSummary, historySnapshot, true, dtwResult),
         }
       }
 

@@ -136,7 +136,7 @@ function getCoreCandidates(features) {
       'A',
       fingerChecks(features, { T: 1, I: 0, M: 0, R: 0, P: 0 }),
       [
-        check('thumb_role side', scoreRole(features.thumb_role, 'side'), 3, true),
+        check('thumb_role side o over', ['side', 'over'].includes(features.thumb_role) ? 1 : 0, 3, true),
         check('sin pinch TI', 1 - scoreLessThan(features.pinch_TI, 0.16), 1.2),
       ],
       curlChecks(features, { I: 'curled', M: 'curled', R: 'curled', P: 'curled' })
@@ -176,6 +176,7 @@ function getCoreCandidates(features) {
       'E',
       fingerChecks(features, { T: 0, I: 0, M: 0, R: 0, P: 0 }),
       [
+        check('pulgar no extendido', scoreLessThan(features.fingers.T, 0.4), 2.5, true),
         check('thumb_role no under', features.thumb_role === 'under' ? 0 : 1, 2.6, true),
         check('sin pinch TI', 1 - scoreLessThan(features.pinch_TI, 0.16), 1),
       ],
@@ -288,6 +289,7 @@ function getCoreCandidates(features) {
         check('direccion I down', scoreDirection(features.directions.I, 'down'), 2.2, true),
         check('direccion M down', scoreDirection(features.directions.M, 'down'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.8),
+        check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
       ],
       curlChecks(features, { I: 'down', M: 'down', R: 'curled', P: 'curled' })
     ),
@@ -298,6 +300,7 @@ function getCoreCandidates(features) {
         check('direccion I down', scoreDirection(features.directions.I, 'down'), 2.2, true),
         check('direccion T down', scoreDirection(features.directions.T, 'down'), 2, true),
         check('pinch_TI medio', scoreRange(features.pinch_TI, 0.15, 0.35, 0.12), 1.2),
+        check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
       ],
       curlChecks(features, { I: 'down', M: 'curled', R: 'curled', P: 'curled' })
     ),

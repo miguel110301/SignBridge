@@ -18,23 +18,49 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
+import { HandLandmarker, FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 
-const MODEL_URL =
+const HAND_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
+
+const FACE_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 
 const WASM_URL =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
 
-export function useHandDetection({ onLandmarks, enabled = true }) {
-  const landmarkerRef   = useRef(null)
-  const animFrameRef    = useRef(null)
-  const lastTimeRef     = useRef(-1)
-  const videoRef        = useRef(null)   // se asigna desde el componente
-  const [ready, setReady] = useState(false)
-  const [error, setError] = useState(null)
+function computeFaceAnchor(faceLandmarks) {
+  if (!faceLandmarks || faceLandmarks.length === 0) return null
+  let minX = 1, maxX = 0, minY = 1, maxY = 0
+  for (const point of faceLandmarks) {
+    if (point.x < minX) minX = point.x
+    if (point.x > maxX) maxX = point.x
+    if (point.y < minY) minY = point.y
+    if (point.y > maxY) maxY = point.y
+  }
+  const width = maxX - minX
+  const height = maxY - minY
+  return {
+    left: minX,
+    right: maxX,
+    top: minY,
+    bottom: maxY,
+    width,
+    height,
+    center: { x: minX + width / 2, y: minY + height / 2 }
+  }
+}
 
-  // ── 1. Inicializar el modelo (solo una vez) ────────────────────────────────
+export function useHandDetection({ onLandmarks, enabled = true }) {
+  const handLandmarkerRef   = useRef(null)
+  const faceLandmarkerRef   = useRef(null)
+  const animFrameRef        = useRef(null)
+  const lastTimeRef         = useRef(-1)
+  const videoRef            = useRef(null)
+  const [ready, setReady]   = useState(false)
+  const [error, setError]   = useState(null)
+
+  // ── 1. Inicializar modelos (solo una vez) ────────────────────────────────
   useEffect(() => {
     let cancelled = false
 
@@ -42,18 +68,25 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
       try {
         const vision = await FilesetResolver.forVisionTasks(WASM_URL)
 
-        landmarkerRef.current = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: MODEL_URL,
-            delegate: 'GPU'           // usa la GPU del dispositivo; fallback a CPU automático
-          },
-          runningMode: 'VIDEO',       // modo VIDEO = detecta en cada frame
-          numHands: 1                 // para el MVP solo necesitamos una mano
-        })
+        const [handLandmarker, faceLandmarker] = await Promise.all([
+          HandLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'GPU' },
+            runningMode: 'VIDEO',
+            numHands: 1
+          }),
+          FaceLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: 'GPU' },
+            runningMode: 'VIDEO',
+            numFaces: 1
+          })
+        ])
+
+        handLandmarkerRef.current = handLandmarker
+        faceLandmarkerRef.current = faceLandmarker
 
         if (!cancelled) setReady(true)
       } catch (err) {
-        console.error('[HandDetection] Error al cargar modelo:', err)
+        console.error('[HandDetection] Error al cargar modelos:', err)
         if (!cancelled) setError(err.message)
       }
     }
@@ -62,9 +95,9 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
     return () => { cancelled = true }
   }, [])
 
-  // ── 2. Loop de detección ───────────────────────────────────────────────────
+  // ── 2. Loop de detección conjunta ──────────────────────────────────────────
   const startDetection = useCallback(() => {
-    if (!landmarkerRef.current || !videoRef.current) return
+    if (!handLandmarkerRef.current || !faceLandmarkerRef.current || !videoRef.current) return
 
     function detect() {
       const video = videoRef.current
@@ -73,15 +106,22 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
         return
       }
 
-      // Solo procesar si el frame cambió (evita trabajo innecesario)
       if (video.currentTime !== lastTimeRef.current) {
         lastTimeRef.current = video.currentTime
 
-        const results = landmarkerRef.current.detectForVideo(video, performance.now())
+        const handResults = handLandmarkerRef.current.detectForVideo(video, performance.now())
+        const faceResults = faceLandmarkerRef.current.detectForVideo(video, performance.now())
 
-        if (results.landmarks?.length > 0) {
-          // landmarks[0] = primera mano detectada, array de 21 puntos {x, y, z}
-          onLandmarks(results.landmarks[0])
+        if (handResults.landmarks?.length > 0) {
+          const handLandmarks = handResults.landmarks[0]
+          const handWorldLandmarks = handResults.worldLandmarks?.[0] ?? null
+          const handedness = handResults.handednesses?.[0]?.[0] ?? null
+
+          const faceAnchor = faceResults.faceLandmarks?.length > 0 
+            ? computeFaceAnchor(faceResults.faceLandmarks[0]) 
+            : null
+
+          onLandmarks(handLandmarks, { faceAnchor, handWorldLandmarks, handedness })
         }
       }
 
@@ -98,7 +138,6 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
     }
   }, [])
 
-  // Iniciar/detener según `enabled`
   useEffect(() => {
     if (ready && enabled) startDetection()
     else stopDetection()
