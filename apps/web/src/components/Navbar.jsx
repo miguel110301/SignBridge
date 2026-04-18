@@ -6,6 +6,7 @@ import Logo from './Logo.jsx'
 export default function Navbar({ isDark, onToggleDark }) {
   const { t, lang, toggleLang } = useI18n()
   const { isAuthenticated, user, logout } = useAuth()
+  const isAdmin = user?.role === 'admin'
 
   return (
     <nav className="sticky top-0 z-50 border-b border-zinc-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
@@ -27,42 +28,48 @@ export default function Navbar({ isDark, onToggleDark }) {
           >
             {t('nav.translate')}
           </NavLink>
-          <NavLink
-            to="/practica"
-            className={({ isActive }) =>
-              `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`
-            }
-          >
-            {t('nav.practice')}
-          </NavLink>
-          <NavLink
-            to="/academia"
-            className={({ isActive }) =>
-              `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`
-            }
-          >
-            {t('nav.academy')}
-          </NavLink>
-          <NavLink
-            to="/entrenamiento"
-            className={({ isActive }) =>
-              `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-accent-50 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`
-            }
-          >
-            {t('nav.training')}
-          </NavLink>
+          {isAuthenticated && (
+            <>
+              <NavLink
+                to="/practica"
+                className={({ isActive }) =>
+                  `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                  }`
+                }
+              >
+                {t('nav.practice')}
+              </NavLink>
+              <NavLink
+                to="/academia"
+                className={({ isActive }) =>
+                  `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                  }`
+                }
+              >
+                {t('nav.academy')}
+              </NavLink>
+              {isAdmin && (
+                <NavLink
+                  to="/entrenamiento"
+                  className={({ isActive }) =>
+                    `rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-accent-50 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                    }`
+                  }
+                >
+                  {t('nav.training')}
+                </NavLink>
+              )}
+            </>
+          )}
         </div>
 
         {/* Right side: controls */}
@@ -137,32 +144,51 @@ export default function Navbar({ isDark, onToggleDark }) {
             </svg>
             {t('nav.translate')}
           </NavLink>
-          <NavLink
-            to="/practica"
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
-                isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
-              }`
-            }
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            {t('nav.practice')}
-          </NavLink>
-          <NavLink
-            to="/academia"
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
-                isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
-              }`
-            }
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-4-3.5l4 2.5 4-2.5" />
-            </svg>
-            {t('nav.academy')}
-          </NavLink>
+          {isAuthenticated && (
+            <>
+              <NavLink
+                to="/practica"
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
+                    isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
+                  }`
+                }
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                {t('nav.practice')}
+              </NavLink>
+              <NavLink
+                to="/academia"
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
+                    isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-500 dark:text-zinc-400'
+                  }`
+                }
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-4-3.5l4 2.5 4-2.5" />
+                </svg>
+                {t('nav.academy')}
+              </NavLink>
+              {isAdmin && (
+                <NavLink
+                  to="/entrenamiento"
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
+                      isActive ? 'text-accent-600 dark:text-accent-400' : 'text-zinc-500 dark:text-zinc-400'
+                    }`
+                  }
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {t('nav.training')}
+                </NavLink>
+              )}
+            </>
+          )}
           <NavLink
             to="/"
             end
@@ -177,19 +203,6 @@ export default function Navbar({ isDark, onToggleDark }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a2 2 0 01-2-2v-4a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2h-4z" />
               </svg>
             </div>
-          </NavLink>
-          <NavLink
-            to="/entrenamiento"
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors touch-manipulation ${
-                isActive ? 'text-accent-600 dark:text-accent-400' : 'text-zinc-500 dark:text-zinc-400'
-              }`
-            }
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {t('nav.training')}
           </NavLink>
           {isAuthenticated ? (
             <button

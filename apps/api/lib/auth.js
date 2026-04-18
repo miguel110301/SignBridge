@@ -20,6 +20,7 @@ export function signAuthToken(user) {
       sub: String(user._id),
       email: user.email,
       name: user.name,
+      role: user.role ?? 'user',
     },
     requireJwtSecret(),
     { expiresIn: TOKEN_EXPIRATION }
@@ -35,6 +36,7 @@ export function toPublicUser(user) {
     id: String(user._id),
     name: user.name,
     email: user.email,
+    role: user.role ?? 'user',
     xp: user.xp ?? 0,
     level: user.level ?? 1,
     createdAt: user.createdAt,

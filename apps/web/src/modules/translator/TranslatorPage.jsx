@@ -13,6 +13,7 @@ import {
 import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition.js'
 import { requestCameraStream } from '../../utils/cameraStream.js'
+import { useAuth } from '../auth/AuthProvider.jsx'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -711,9 +712,9 @@ export default function TranslatorPage() {
   const [voiceInterim, setVoiceInterim] = useState('')
   const [voiceLines, setVoiceLines] = useState([])
   const [latestVoiceTranscript, setLatestVoiceTranscript] = useState('')
-  const [showDebug, setShowDebug] = useState(() => (
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
-  ))
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const [showDebug, setShowDebug] = useState(false)
   const [debugSnapshot, setDebugSnapshot] = useState(null)
   const requiredStabilityFrames = isCompactViewport ? 6 : LETTER_STABILITY_FRAMES
   const isVoiceToSignMode = translationMode === TRANSLATION_MODE.VOICE_TO_SIGN
@@ -1990,14 +1991,16 @@ export default function TranslatorPage() {
                   {modeToggleLabel}
                 </button>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowDebug((prev) => !prev)}
-                    className="rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-lg transition active:scale-95 touch-manipulation"
-                  >
-                    {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
-                  </button>
+                <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDebug((prev) => !prev)}
+                      className="rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-lg transition active:scale-95 touch-manipulation"
+                    >
+                      {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -2403,8 +2406,8 @@ export default function TranslatorPage() {
                 {modeToggleLabel}
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                {!isVoiceToSignMode ? (
+              <div className={`grid gap-3 ${isAdmin && !isVoiceToSignMode ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {isAdmin && !isVoiceToSignMode && (
                   <button
                     type="button"
                     onClick={() => setShowDebug((prev) => !prev)}
@@ -2412,10 +2415,6 @@ export default function TranslatorPage() {
                   >
                     {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
                   </button>
-                ) : (
-                  <div className="rounded-full border border-white/10 bg-black/40 px-4 py-3 text-center text-sm font-semibold text-zinc-400">
-                    Speech local
-                  </div>
                 )}
 
                 <button
@@ -2460,7 +2459,7 @@ export default function TranslatorPage() {
             </button>
           </div>
 
-          {!isVoiceToSignMode && (
+          {isAdmin && !isVoiceToSignMode && (
             <button
               type="button"
               onClick={() => setShowDebug((prev) => !prev)}

@@ -92,8 +92,8 @@ export default function PracticePage() {
 
 	if (loading) {
 		return (
-			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
-				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-zinc-950 px-4 text-white">
+				<div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-6 py-5 text-sm text-zinc-400">
 					Cargando ruta de aprendizaje...
 				</div>
 			</div>
@@ -102,7 +102,7 @@ export default function PracticePage() {
 
 	if (error) {
 		return (
-			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-zinc-950 px-4 text-white">
 				<div className="max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-6">
 					<p className="text-sm text-red-100">{error}</p>
 					<button
@@ -119,8 +119,8 @@ export default function PracticePage() {
 
 	if (modules.length === 0 || !activeModule) {
 		return (
-			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
-				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
+			<div className="flex min-h-[calc(100dvh-65px)] items-center justify-center bg-zinc-950 px-4 text-white">
+				<div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-6 py-5 text-sm text-zinc-400">
 					Aun no hay modulos disponibles en la base de datos.
 				</div>
 			</div>
@@ -128,18 +128,18 @@ export default function PracticePage() {
 	}
 
 	return (
-		<div className="min-h-[calc(100dvh-65px)] bg-[#030712] text-white">
+		<div className="min-h-[calc(100dvh-65px)] bg-zinc-950 text-white">
 			<MaxWidthWrapper className="py-9 sm:py-12">
 				<div className="max-w-[1140px]">
 					<Badge>PRACTICE MODE</Badge>
-					<h1 className="mt-4 text-[2.6rem] font-medium tracking-tight text-white sm:text-[3.25rem]">
+					<h1 className="mt-4 text-5xl font-medium tracking-tight text-white sm:text-6xl">
 						Ruta de aprendizaje
 					</h1>
 				</div>
 
 				<section className="mt-10 grid gap-14 lg:grid-cols-[1.08fr_0.92fr] xl:gap-20">
 					<div>
-						<h2 className="mb-8 text-xs font-semibold uppercase tracking-[0.24em] text-[#9fb0d8]">
+						<h2 className="mb-8 text-xs font-semibold uppercase tracking-[0.24em] text-zinc-400">
 							Modulos
 						</h2>
 
@@ -158,7 +158,7 @@ export default function PracticePage() {
 					</div>
 
 					<div>
-						<p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#5b57ff]">
+						<p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-400">
 							Modulo seleccionado
 						</p>
 						{actionError ? (
@@ -166,10 +166,10 @@ export default function PracticePage() {
 								{actionError}
 							</p>
 						) : null}
-						<h3 className="mt-4 text-[2.1rem] font-medium leading-tight text-white sm:text-[2.45rem]">
+						<h3 className="mt-4 text-4xl font-medium leading-tight text-white sm:text-5xl">
 							{activeModule.title}
 						</h3>
-						<p className="mt-3 max-w-xl text-[1.05rem] leading-relaxed text-[#9db0d2]">
+						<p className="mt-3 max-w-xl text-[1.05rem] leading-relaxed text-zinc-400">
 							{activeModule.description || 'Sin descripcion disponible.'}
 						</p>
 

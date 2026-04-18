@@ -16,6 +16,7 @@ import LessonPage     from './modules/academy/LessonPage.jsx'
 import LessonComplete from './modules/academy/LessonComplete.jsx'
 import AuthPage from './modules/auth/AuthPage.jsx'
 import RequireAuth from './modules/auth/RequireAuth.jsx'
+import RequireAdmin from './modules/auth/RequireAdmin.jsx'
 import Navbar from './components/Navbar.jsx'
 import { useDarkMode } from './hooks/useDarkMode.js'
 
@@ -40,7 +41,7 @@ export default function App() {
           <Route path={FUNDAMENTALS_MODULE_ROUTE} element={<RequireAuth><FundamentosLsmModulePage /></RequireAuth>} />
           <Route path={INTERACCIONES_BASICAS_MODULE_ROUTE} element={<RequireAuth><InteraccionesBasicasModulePage /></RequireAuth>} />
           <Route path={CONTEXTOS_REALES_MODULE_ROUTE} element={<RequireAuth><ContextosRealesModulePage /></RequireAuth>} />
-          <Route path="/entrenamiento" element={<RequireAuth><TrainingPage /></RequireAuth>} />
+          <Route path="/entrenamiento" element={<RequireAdmin><TrainingPage /></RequireAdmin>} />
           <Route path="/academia"   element={<RequireAuth><AcademyPage /></RequireAuth>} />
           <Route path="/academia/leccion/:unitId/:lessonId" element={<RequireAuth><LessonPage /></RequireAuth>} />
           <Route path="/academia/resultado/:unitId/:lessonId" element={<RequireAuth><LessonComplete /></RequireAuth>} />
