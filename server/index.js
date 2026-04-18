@@ -20,6 +20,7 @@ import mongoose   from 'mongoose'
 import elevenRoute  from './routes/elevenlabs.js'
 import geminiRoute  from './routes/gemini.js'
 import progressRoute from './routes/progress.js'
+import trainingRoute from './routes/training.js'
 
 const app  = express()
 const PORT = process.env.PORT || 3001
@@ -38,6 +39,7 @@ app.use(express.json({ limit: '5mb' }))   // imágenes en base64 para Gemini
 app.use('/api/speak',    elevenRoute)
 app.use('/api/practice', geminiRoute)
 app.use('/api/progress', progressRoute)
+app.use('/api/training', trainingRoute)
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }))

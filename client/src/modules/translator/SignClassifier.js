@@ -26,24 +26,31 @@ export function extractHandMetrics(landmarks, meta = {}) {
     features,
     classification,
     fingers: {
-      thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.directions.T },
-      index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.directions.I },
-      middle: { state: features.fingers.M, extended: features.fingers.M >= 0.75, direction: features.directions.M },
-      ring: { state: features.fingers.R, extended: features.fingers.R >= 0.75, direction: features.directions.R },
-      pinky: { state: features.fingers.P, extended: features.fingers.P >= 0.75, direction: features.directions.P },
+      thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.camera_directions.T, localDirection: features.directions.T },
+      index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.camera_directions.I, localDirection: features.directions.I },
+      middle: { state: features.fingers.M, extended: features.fingers.M >= 0.75, direction: features.camera_directions.M, localDirection: features.directions.M },
+      ring: { state: features.fingers.R, extended: features.fingers.R >= 0.75, direction: features.camera_directions.R, localDirection: features.directions.R },
+      pinky: { state: features.fingers.P, extended: features.fingers.P >= 0.75, direction: features.camera_directions.P, localDirection: features.directions.P },
     },
-    directions: features.directions,
+    directions: {
+      camera: features.camera_directions,
+      local: features.directions,
+    },
     pairs: {
       indexMiddle: {
         gap: features.gap_IM,
-        horizontal: features.directions.I === 'horizontal' && features.directions.M === 'horizontal',
-        vertical: features.directions.I === 'up' && features.directions.M === 'up',
+        horizontal: features.camera_directions.I === 'horizontal' && features.camera_directions.M === 'horizontal',
+        vertical: features.camera_directions.I === 'up' && features.camera_directions.M === 'up',
         crossed: features.crossed_IM,
+        localHorizontal: features.directions.I === 'horizontal' && features.directions.M === 'horizontal',
+        localVertical: features.directions.I === 'up' && features.directions.M === 'up',
       },
       middleRing: {
         gap: features.gap_MR,
-        horizontal: features.directions.M === 'horizontal' && features.directions.R === 'horizontal',
-        vertical: features.directions.M === 'up' && features.directions.R === 'up',
+        horizontal: features.camera_directions.M === 'horizontal' && features.camera_directions.R === 'horizontal',
+        vertical: features.camera_directions.M === 'up' && features.camera_directions.R === 'up',
+        localHorizontal: features.directions.M === 'horizontal' && features.directions.R === 'horizontal',
+        localVertical: features.directions.M === 'up' && features.directions.R === 'up',
       },
     },
     relations: {
@@ -51,11 +58,17 @@ export function extractHandMetrics(landmarks, meta = {}) {
       crossedIM: features.crossed_IM,
       pinchTI: features.pinch_TI,
       pinchTM: features.pinch_TM,
+      palmOrientation: features.palm_orientation,
     },
     posture: {
       palmCenter: features.palmCenter,
       nonThumbExtendedCount: features.meta.nonThumbExtendedCount,
       nonThumbClosedCount: features.meta.nonThumbClosedCount,
+    },
+    orientation: {
+      palmOrientation: features.palm_orientation,
+      palmNormal: features.palm_normal,
+      axes: features.axes,
     },
   }
 }

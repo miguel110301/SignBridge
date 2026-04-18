@@ -11,6 +11,7 @@ import { SIGN_LANGUAGE_PROFILE } from './SignMap.js'
 import { decodeFingerSpelling } from './SpellingDecoder.js'
 import { createGestureSequenceRecognizer } from './GestureSequenceRecognizer.js'
 import { requestCameraStream } from '../../utils/cameraStream.js'
+import { hydrateTemplatesFromServer } from '../training/KNNStorage.js'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -86,6 +87,31 @@ function formatTopCandidates(candidates = []) {
     .slice(0, 3)
     .map((candidate) => `${candidate.letter}:${candidate.confidence.toFixed(2)}`)
     .join(' ')
+}
+
+function shortDirection(direction) {
+  if (direction === 'horizontal') return 'h'
+  if (direction === 'up') return 'u'
+  if (direction === 'down') return 'd'
+  return '—'
+}
+
+function formatDirectionMap(directionMap) {
+  if (!directionMap) return '—'
+
+  return ['T', 'I', 'M', 'R', 'P']
+    .map((key) => `${key}:${shortDirection(directionMap[key])}`)
+    .join(' ')
+}
+
+function formatVector2(vector) {
+  if (!vector) return '(—, —)'
+  return `(${vector.x.toFixed(2)},${vector.y.toFixed(2)})`
+}
+
+function formatVector3(vector) {
+  if (!vector) return '(—, —, —)'
+  return `(${vector.x.toFixed(2)},${vector.y.toFixed(2)},${vector.z.toFixed(2)})`
 }
 
 function inferMirrorPreview(track) {
@@ -381,6 +407,50 @@ function drawFaceDebug(ctx, projection, faceLandmarks, faceAnchor) {
   }
 }
 
+function drawHandAxes(ctx, projection, rawPalmCenter, handMetrics) {
+  const screenAxes = handMetrics?.orientation?.axes?.screen
+  if (!screenAxes?.x || !screenAxes?.y) return
+
+  const palmCenter = toCanvasPoint(rawPalmCenter, projection)
+  const axisLength = 56
+
+  drawArrow(
+    ctx,
+    palmCenter,
+    {
+      x: palmCenter.x + (screenAxes.x.x * axisLength),
+      y: palmCenter.y + (screenAxes.x.y * axisLength),
+    },
+    '#f97316',
+    'X'
+  )
+
+  drawArrow(
+    ctx,
+    palmCenter,
+    {
+      x: palmCenter.x + (screenAxes.y.x * axisLength),
+      y: palmCenter.y + (screenAxes.y.y * axisLength),
+    },
+    '#22d3ee',
+    'Y'
+  )
+
+  const palmNormal = handMetrics?.orientation?.palmNormal
+  if (palmNormal) {
+    drawArrow(
+      ctx,
+      palmCenter,
+      {
+        x: palmCenter.x + (palmNormal.x * 34),
+        y: palmCenter.y + (palmNormal.y * 34),
+      },
+      '#e879f9',
+      `N z:${palmNormal.z.toFixed(2)}`
+    )
+  }
+}
+
 function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
   if (!canvas) return
 
@@ -476,6 +546,7 @@ function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
     ctx.fill()
     ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText('PALM', palmCenter.x + 8, palmCenter.y + 4)
+    drawHandAxes(ctx, projection, rawPalmCenter, handMetrics)
   }
 
   if (gestureDebug?.currentFrame?.palmCenter) {
@@ -626,8 +697,16 @@ export default function TranslatorPage() {
             gapIM: debugFrame.handMetrics.features.gap_IM,
             crossedIM: debugFrame.handMetrics.features.crossed_IM,
             thumbRole: debugFrame.handMetrics.features.thumb_role,
+            palmOrientation: debugFrame.handMetrics.features.palm_orientation,
           }
         : null,
+      directionState: {
+        camera: debugFrame.handMetrics?.directions?.camera ?? null,
+        local: debugFrame.handMetrics?.directions?.local ?? null,
+        palmNormal: debugFrame.handMetrics?.orientation?.palmNormal ?? null,
+        palmOrientation: debugFrame.handMetrics?.orientation?.palmOrientation ?? null,
+        screenAxes: debugFrame.handMetrics?.orientation?.axes?.screen ?? null,
+      },
       palmCenter: debugFrame.handMetrics?.posture?.palmCenter ?? null,
       handQuality: debugFrame.handQuality ?? null,
       staticPose: debugFrame.staticPose ?? null,
@@ -1029,6 +1108,12 @@ export default function TranslatorPage() {
   }, [])
 
   useEffect(() => {
+    hydrateTemplatesFromServer().catch((error) => {
+      console.warn('[Translator] No se pudo hidratar dataset desde MongoDB; se usará cache local.', error)
+    })
+  }, [])
+
+  useEffect(() => {
     if (!isActive) {
       stopCameraStream()
       clearAudioQueue()
@@ -1300,6 +1385,9 @@ export default function TranslatorPage() {
               <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
               <p>motivo:{debugSnapshot.handQuality?.reasons?.length ? debugSnapshot.handQuality.reasons.map(formatQualityReason).join(', ') : 'ok'}</p>
               <p>estado:{debugSnapshot.fingerDebugString ?? '—'}</p>
+              <p>cam:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
+              <p>loc:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+              <p>palm:{debugSnapshot.directionState?.palmOrientation ?? '—'} n:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
               <p>top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}</p>
               <p>gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(2) ?? '—'} crossed:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}</p>
               <p>2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}</p>
@@ -1346,11 +1434,21 @@ export default function TranslatorPage() {
                 top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}
               </p>
               <p className="mt-2 font-mono">
-                gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} crossed_IM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb_role:{debugSnapshot.featureState?.thumbRole ?? '—'}
+                gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} crossed_IM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb_role:{debugSnapshot.featureState?.thumbRole ?? '—'} palm:{debugSnapshot.featureState?.palmOrientation ?? '—'}
               </p>
               <p className="mt-2 font-mono text-amber-200">
                 2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}
               </p>
+            </div>
+
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Ejes / orientacion</p>
+              <div className="mt-2 space-y-1 font-mono">
+                <p>camDir:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
+                <p>locDir:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+                <p>axisX:{formatVector2(debugSnapshot.directionState?.screenAxes?.x)} axisY:{formatVector2(debugSnapshot.directionState?.screenAxes?.y)}</p>
+                <p>normal:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
+              </div>
             </div>
 
             <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">

@@ -40,6 +40,10 @@ function scoreRole(actual, expected) {
   return actual === expected ? 1 : 0
 }
 
+function worldDir(features, fingerKey) {
+  return features.camera_directions?.[fingerKey] ?? features.directions?.[fingerKey]
+}
+
 function scoreCurlUp(value) {
   return scoreLessThan(value, -0.12, 0.12)
 }
@@ -168,7 +172,7 @@ function getCoreCandidates(features) {
       fingerChecks(features, { I: 1, M: 0, R: 0, P: 0 }),
       [
         check('pinch_TM < 0.15', scoreLessThan(features.pinch_TM, 0.15), 3, true),
-        check('direccion I up', scoreDirection(features.directions.I, 'up'), 2, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2, true),
       ],
       curlChecks(features, { I: 'up', M: 'curled', R: 'curled', P: 'curled' })
     ),
@@ -195,8 +199,8 @@ function getCoreCandidates(features) {
       'G',
       fingerChecks(features, { T: 1, I: 1, M: 0, R: 0, P: 0 }),
       [
-        check('direccion I horizontal', scoreDirection(features.directions.I, 'horizontal'), 2.2, true),
-        check('direccion T horizontal', scoreDirection(features.directions.T, 'horizontal'), 2, true),
+        check('direccion I horizontal', scoreDirection(worldDir(features, 'I'), 'horizontal'), 2.2, true),
+        check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 2, true),
       ],
       [
@@ -208,8 +212,8 @@ function getCoreCandidates(features) {
       'H',
       fingerChecks(features, { T: 0, I: 1, M: 1, R: 0, P: 0 }),
       [
-        check('direccion I horizontal', scoreDirection(features.directions.I, 'horizontal'), 2.2, true),
-        check('direccion M horizontal', scoreDirection(features.directions.M, 'horizontal'), 2.2, true),
+        check('direccion I horizontal', scoreDirection(worldDir(features, 'I'), 'horizontal'), 2.2, true),
+        check('direccion M horizontal', scoreDirection(worldDir(features, 'M'), 'horizontal'), 2.2, true),
         check('gap_IM < 0.10', scoreLessThan(features.gap_IM, 0.1), 2.2, true),
       ],
       [
@@ -221,7 +225,7 @@ function getCoreCandidates(features) {
       'I',
       fingerChecks(features, { T: 0, I: 0, M: 0, R: 0, P: 1 }),
       [
-        check('direccion P up', scoreDirection(features.directions.P, 'up'), 2, true),
+        check('direccion P up', scoreDirection(worldDir(features, 'P'), 'up'), 2, true),
       ],
       curlChecks(features, { P: 'up', I: 'curled', M: 'curled', R: 'curled' })
     ),
@@ -240,8 +244,8 @@ function getCoreCandidates(features) {
       'L',
       fingerChecks(features, { T: 1, I: 1, M: 0, R: 0, P: 0 }),
       [
-        check('direccion I up', scoreDirection(features.directions.I, 'up'), 2.2, true),
-        check('direccion T horizontal', scoreDirection(features.directions.T, 'horizontal'), 2.2, true),
+        check('direccion I up', scoreDirection(worldDir(features, 'I'), 'up'), 2.2, true),
+        check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 2.6, true),
         check('pinch_TM no', 1 - scoreLessThan(features.pinch_TM, 0.16), 1.2),
       ],
@@ -286,8 +290,8 @@ function getCoreCandidates(features) {
       'P',
       fingerChecks(features, { T: 1, I: 1, M: 1, R: 0, P: 0 }),
       [
-        check('direccion I down', scoreDirection(features.directions.I, 'down'), 2.2, true),
-        check('direccion M down', scoreDirection(features.directions.M, 'down'), 2.2, true),
+        check('direccion I down', scoreDirection(worldDir(features, 'I'), 'down'), 2.2, true),
+        check('direccion M down', scoreDirection(worldDir(features, 'M'), 'down'), 2.2, true),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.8),
         check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
       ],
@@ -297,8 +301,8 @@ function getCoreCandidates(features) {
       'Q',
       fingerChecks(features, { T: 1, I: 1, M: 0, R: 0, P: 0 }),
       [
-        check('direccion I down', scoreDirection(features.directions.I, 'down'), 2.2, true),
-        check('direccion T down', scoreDirection(features.directions.T, 'down'), 2, true),
+        check('direccion I down', scoreDirection(worldDir(features, 'I'), 'down'), 2.2, true),
+        check('direccion T down', scoreDirection(worldDir(features, 'T'), 'down'), 2, true),
         check('pinch_TI medio', scoreRange(features.pinch_TI, 0.15, 0.35, 0.12), 1.2),
         check('palma hacia abajo', ['down', 'back'].includes(features.palm_orientation) ? 1 : 0, 1.5),
       ],
@@ -361,8 +365,8 @@ function getCoreCandidates(features) {
       'Y',
       fingerChecks(features, { T: 1, I: 0, M: 0, R: 0, P: 1 }),
       [
-        check('direccion T horizontal', scoreDirection(features.directions.T, 'horizontal'), 1.8),
-        check('direccion P up', scoreDirection(features.directions.P, 'up'), 1.6),
+        check('direccion T horizontal', scoreDirection(worldDir(features, 'T'), 'horizontal'), 1.8),
+        check('direccion P up', scoreDirection(worldDir(features, 'P'), 'up'), 1.6),
         check('thumb_role side', scoreRole(features.thumb_role, 'side'), 1.6),
       ],
       curlChecks(features, { P: 'up', I: 'curled', M: 'curled', R: 'curled' })

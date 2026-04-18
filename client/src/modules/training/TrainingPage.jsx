@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { extractHandFeatures } from '../translator/HandFeatureExtractor.js'
-import { saveTemplate, getTemplates, clearTemplates, deleteTemplateById } from './KNNStorage.js'
+import {
+  saveTemplate,
+  getTemplates,
+  clearTemplates,
+  deleteTemplateById,
+  hydrateTemplatesFromServer,
+} from './KNNStorage.js'
 import { requestCameraStream, stopCameraStream } from '../../utils/cameraStream.js'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -83,6 +89,26 @@ export default function TrainingPage() {
   }, [hookVideoRef])
 
   useEffect(() => {
+    let active = true
+
+    hydrateTemplatesFromServer()
+      .then((dataset) => {
+        if (active) setTemplates(dataset)
+      })
+      .catch((error) => {
+        console.error('[Training] No se pudo hidratar dataset desde MongoDB:', error)
+        if (active) {
+          setTemplates(getTemplates())
+          setMessage('Usando cache local; no se pudo sincronizar con MongoDB.')
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     setTemplates(getTemplates())
   }, [mode])
 
@@ -91,32 +117,44 @@ export default function TrainingPage() {
     setMessage('')
   }, [mode, selectedLetter, selectedGesture])
 
-  const handleCaptureStatic = () => {
+  const handleCaptureStatic = async () => {
     if (!currentCanonical) {
       setMessage('No se detecta mano en cámara')
       return
     }
-    const success = saveTemplate(selectedLetter, currentCanonical, false)
-    if (success) {
-      setTemplates(getTemplates())
-      setMessage(`¡Molde estático guardado para '${selectedLetter}'!`)
-      setTimeout(() => setMessage(''), 2000)
+
+    try {
+      const success = await saveTemplate(selectedLetter, currentCanonical, false)
+      if (success) {
+        setTemplates(getTemplates())
+        setMessage(`¡Molde estático guardado en MongoDB para '${selectedLetter}'!`)
+        setTimeout(() => setMessage(''), 2000)
+      }
+    } catch (error) {
+      console.error('[Training] Error guardando molde estático:', error)
+      setMessage('No se pudo guardar en MongoDB.')
+      setTimeout(() => setMessage(''), 2500)
     }
   }
 
-  const handleCaptureDynamic = () => {
+  const handleCaptureDynamic = async () => {
     setMessage('GRABANDO... (2 seg)')
     setIsRecording(true)
     recordingBufferRef.current = []
     
     // Graba por 2 segundos
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsRecording(false)
       const frames = recordingBufferRef.current
       if (frames.length > 5) {
-        saveTemplate(selectedGesture, frames, true)
-        setTemplates(getTemplates())
-        setMessage(`¡Secuencia guardada para '${selectedGesture}'! (${frames.length} frames)`)
+        try {
+          await saveTemplate(selectedGesture, frames, true)
+          setTemplates(getTemplates())
+          setMessage(`¡Secuencia guardada en MongoDB para '${selectedGesture}'! (${frames.length} frames)`)
+        } catch (error) {
+          console.error('[Training] Error guardando secuencia:', error)
+          setMessage('No se pudo guardar la secuencia en MongoDB.')
+        }
       } else {
         setMessage('Error: no se detectó suficiente movimiento de mano.')
       }
@@ -126,14 +164,26 @@ export default function TrainingPage() {
 
   const handleCapture = mode === 'static' ? handleCaptureStatic : handleCaptureDynamic
 
-  const handleDelete = (id) => {
-    deleteTemplateById(activeLabel, id)
-    setTemplates(getTemplates())
+  const handleDelete = async (id) => {
+    try {
+      await deleteTemplateById(activeLabel, id)
+      setTemplates(getTemplates())
+    } catch (error) {
+      console.error('[Training] Error borrando muestra:', error)
+      setMessage('No se pudo borrar la muestra en MongoDB.')
+      setTimeout(() => setMessage(''), 2500)
+    }
   }
 
-  const handleClearLetter = () => {
-    clearTemplates(activeLabel)
-    setTemplates(getTemplates())
+  const handleClearLetter = async () => {
+    try {
+      await clearTemplates(activeLabel)
+      setTemplates(getTemplates())
+    } catch (error) {
+      console.error('[Training] Error limpiando dataset de la letra:', error)
+      setMessage('No se pudo limpiar la letra en MongoDB.')
+      setTimeout(() => setMessage(''), 2500)
+    }
   }
 
   return (
