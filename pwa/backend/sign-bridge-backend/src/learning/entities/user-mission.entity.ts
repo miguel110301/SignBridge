@@ -26,7 +26,9 @@ export class UserMission {
   @Column({ name: 'mission_id', type: 'uuid' })
   missionId!: string;
 
-  @ManyToOne(() => Mission, (mission) => mission.userMissions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Mission, (mission) => mission.userMissions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'mission_id' })
   mission!: Mission;
 

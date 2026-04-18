@@ -9,7 +9,14 @@ import { MissionsController } from './missions.controller';
 import { ModulesController } from './modules.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LearningModuleEntity, Mission, UserMission, User])],
+  imports: [
+    TypeOrmModule.forFeature([
+      LearningModuleEntity,
+      Mission,
+      UserMission,
+      User,
+    ]),
+  ],
   providers: [LearningService],
   controllers: [ModulesController, MissionsController],
   exports: [LearningService],

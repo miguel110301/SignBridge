@@ -19,9 +19,13 @@ export class Mission {
   @Column({ name: 'module_id', type: 'uuid' })
   moduleId!: string;
 
-  @ManyToOne(() => LearningModuleEntity, (learningModule) => learningModule.missions, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(
+    () => LearningModuleEntity,
+    (learningModule) => learningModule.missions,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
   @JoinColumn({ name: 'module_id' })
   module!: LearningModuleEntity;
 
