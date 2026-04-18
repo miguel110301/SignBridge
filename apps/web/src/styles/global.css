@@ -1,6 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+@font-face {
+  font-family: 'Fleischmann Hand Sign';
+  src: url('../assets/fonts/Fleischmann_Mexican_Hand_Sign.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --font-readable: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+  --font-display-sign: 'Fleischmann Hand Sign', 'Space Grotesk', 'Segoe UI', sans-serif;
+}
 
 @layer base {
   html,
@@ -46,5 +61,15 @@
   .bubble-voice {
     @apply bg-zinc-700 text-white px-4 py-2 rounded-2xl rounded-br-sm
            max-w-xs self-end text-sm;
+  }
+
+  .font-readable {
+    font-family: var(--font-readable);
+  }
+
+  .font-sign-display {
+    font-family: var(--font-display-sign);
+    font-weight: 400;
+    font-synthesis-weight: none;
   }
 }

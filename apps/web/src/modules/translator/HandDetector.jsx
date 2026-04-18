@@ -21,7 +21,7 @@ const HAND_CONNECTIONS = [
 
 export default function HandDetector({ onSignDetected, enabled = true }) {
   const canvasRef    = useRef(null)
-  const smootherRef  = useRef(createSmoother(8))
+  const smootherRef  = useRef(createSmoother())
   const lastSignRef  = useRef(null)
 
   const [currentSign, setCurrentSign] = useState(null)

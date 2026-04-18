@@ -164,12 +164,20 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     P: scoreFingerState(pinky),
   }
 
+  const localVectors = {
+    T: normalize2D(vec(thumb.mcp, thumb.tip)),
+    I: normalize2D(vec(index.mcp, index.tip)),
+    M: normalize2D(vec(middle.mcp, middle.tip)),
+    R: normalize2D(vec(ring.mcp, ring.tip)),
+    P: normalize2D(vec(pinky.mcp, pinky.tip)),
+  }
+
   const directions = {
-    T: classifyDirection(vec(thumb.mcp, thumb.tip)),
-    I: classifyDirection(vec(index.mcp, index.tip)),
-    M: classifyDirection(vec(middle.mcp, middle.tip)),
-    R: classifyDirection(vec(ring.mcp, ring.tip)),
-    P: classifyDirection(vec(pinky.mcp, pinky.tip)),
+    T: classifyDirection(localVectors.T),
+    I: classifyDirection(localVectors.I),
+    M: classifyDirection(localVectors.M),
+    R: classifyDirection(localVectors.R),
+    P: classifyDirection(localVectors.P),
   }
 
   const rawThumb = {
@@ -193,12 +201,20 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     tip: landmarks[LM.PINKY_TIP],
   }
 
+  const cameraVectors = {
+    T: normalize2D(vec(rawThumb.mcp, rawThumb.tip)),
+    I: normalize2D(vec(rawIndex.mcp, rawIndex.tip)),
+    M: normalize2D(vec(rawMiddle.mcp, rawMiddle.tip)),
+    R: normalize2D(vec(rawRing.mcp, rawRing.tip)),
+    P: normalize2D(vec(rawPinky.mcp, rawPinky.tip)),
+  }
+
   const cameraDirections = {
-    T: classifyCameraDirection(vec(rawThumb.mcp, rawThumb.tip)),
-    I: classifyCameraDirection(vec(rawIndex.mcp, rawIndex.tip)),
-    M: classifyCameraDirection(vec(rawMiddle.mcp, rawMiddle.tip)),
-    R: classifyCameraDirection(vec(rawRing.mcp, rawRing.tip)),
-    P: classifyCameraDirection(vec(rawPinky.mcp, rawPinky.tip)),
+    T: classifyCameraDirection(cameraVectors.T),
+    I: classifyCameraDirection(cameraVectors.I),
+    M: classifyCameraDirection(cameraVectors.M),
+    R: classifyCameraDirection(cameraVectors.R),
+    P: classifyCameraDirection(cameraVectors.P),
   }
 
   const screenAxes = {
@@ -248,7 +264,9 @@ export function extractHandFeatures(landmarks, worldLandmarks) {
     palmCenter: getPalmCenter(landmarks),
     fingers: fingerStates,
     directions,
+    local_vectors: localVectors,
     camera_directions: cameraDirections,
+    camera_vectors: cameraVectors,
     gap_IM: gapIM,
     gap_MR: gapMR,
     crossed_IM: crossedIM,

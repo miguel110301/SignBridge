@@ -2,6 +2,7 @@ const STORAGE_KEY = 'signbridge_knn_dataset'
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
 let memoryCache = null
+let storagePersistenceAvailable = true
 
 function normalizeLabel(label) {
   const value = String(label || '').trim()
@@ -93,7 +94,20 @@ async function migrateMissingLocalSamples(localData, serverData) {
 
 function writeTemplates(data) {
   memoryCache = data
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+
+  if (!storagePersistenceAvailable) {
+    return data
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (error) {
+    storagePersistenceAvailable = false
+    if (error?.name !== 'QuotaExceededError') {
+      console.warn('[KNNStorage] No se pudo persistir dataset en localStorage; usando cache en memoria.', error)
+    }
+  }
+
   return data
 }
 
@@ -104,6 +118,7 @@ function readTemplates() {
     const raw = localStorage.getItem(STORAGE_KEY)
     memoryCache = raw ? JSON.parse(raw) : {}
   } catch (e) {
+    storagePersistenceAvailable = false
     memoryCache = {}
   }
 
@@ -181,7 +196,11 @@ export async function clearTemplates(label = null) {
     }
 
     memoryCache = {}
-    localStorage.removeItem(STORAGE_KEY)
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      storagePersistenceAvailable = false
+    }
   }
 }
 

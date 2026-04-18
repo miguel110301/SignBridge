@@ -15,58 +15,60 @@ export default function App() {
   return (
     <div className={isImmersiveRoute ? 'h-[100dvh] bg-black' : 'min-h-screen flex flex-col'}>
       {!isImmersiveRoute && (
-        <nav className="flex items-center justify-between border-b border-zinc-800 px-4 py-4 sm:px-6">
-          <NavLink to="/" className="text-lg font-bold tracking-tight text-brand-500 sm:text-xl">
-            SignBridge
-          </NavLink>
-          <div className="flex gap-3 text-sm sm:gap-4">
-            <NavLink
-              to="/traductor"
-              className={({ isActive }) =>
-                isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
-              }
-            >
-              Traductor
+        <nav className="border-b border-zinc-800 px-4 py-4 sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <NavLink to="/" className="text-lg font-bold tracking-tight text-brand-500 sm:text-xl">
+              SignBridge
             </NavLink>
-            <NavLink
-              to="/practica"
-              className={({ isActive }) =>
-                isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
-              }
-            >
-              Practica
-            </NavLink>
-            <NavLink
-              to="/entrenamiento"
-              className={({ isActive }) =>
-                isActive ? 'font-medium text-white' : 'text-emerald-400 transition-colors hover:text-emerald-300'
-              }
-            >
-              Entrenamiento
-            </NavLink>
-            {isAuthenticated ? (
-              <>
-                <span className="hidden text-zinc-400 sm:inline">
-                  {user?.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="text-zinc-400 transition-colors hover:text-white"
-                >
-                  Salir
-                </button>
-              </>
-            ) : (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
               <NavLink
-                to="/login"
+                to="/traductor"
                 className={({ isActive }) =>
                   isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
                 }
               >
-                Login
+                Traductor
               </NavLink>
-            )}
+              <NavLink
+                to="/practica"
+                className={({ isActive }) =>
+                  isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
+                }
+              >
+                Practica
+              </NavLink>
+              <NavLink
+                to="/entrenamiento"
+                className={({ isActive }) =>
+                  isActive ? 'font-medium text-white' : 'text-emerald-400 transition-colors hover:text-emerald-300'
+                }
+              >
+                Entrenamiento
+              </NavLink>
+              {isAuthenticated ? (
+                <>
+                  <span className="max-w-[12rem] truncate text-zinc-400">
+                    {user?.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="text-zinc-400 transition-colors hover:text-white"
+                  >
+                    Salir
+                  </button>
+                </>
+              ) : (
+                <NavLink
+                  to="/login"
+                  className={({ isActive }) =>
+                    isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
+                  }
+                >
+                  Login
+                </NavLink>
+              )}
+            </div>
           </div>
         </nav>
       )}

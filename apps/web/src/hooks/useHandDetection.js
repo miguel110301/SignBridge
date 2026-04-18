@@ -18,7 +18,6 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { HandLandmarker, FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 
 const HAND_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
@@ -31,27 +30,58 @@ const WASM_URL =
 
 const FACE_DETECTION_INTERVAL_MS = 140
 
-async function createHandLandmarkerWithFallback(vision) {
+async function createHandLandmarkerWithFallback(vision, HandLandmarkerClass) {
   try {
-    return await HandLandmarker.createFromOptions(vision, {
+    return await HandLandmarkerClass.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'GPU' },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands: 2,
     })
   } catch (gpuError) {
     console.warn('[HandDetection] GPU no disponible para mano, usando CPU:', gpuError)
 
-    return HandLandmarker.createFromOptions(vision, {
+    return HandLandmarkerClass.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'CPU' },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands: 2,
     })
   }
 }
 
-async function createFaceLandmarkerWithFallback(vision) {
+function computeHandBox(landmarks) {
+  if (!landmarks?.length) return null
+
+  const xs = landmarks.map((point) => point.x)
+  const ys = landmarks.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+    area: (maxX - minX) * (maxY - minY),
+  }
+}
+
+function getPalmCenter(landmarks) {
+  if (!landmarks?.length) return null
+
+  return {
+    x: (landmarks[0].x + landmarks[5].x + landmarks[9].x + landmarks[13].x + landmarks[17].x) / 5,
+    y: (landmarks[0].y + landmarks[5].y + landmarks[9].y + landmarks[13].y + landmarks[17].y) / 5,
+    z: ((landmarks[0].z ?? 0) + (landmarks[5].z ?? 0) + (landmarks[9].z ?? 0) + (landmarks[13].z ?? 0) + (landmarks[17].z ?? 0)) / 5,
+  }
+}
+
+async function createFaceLandmarkerWithFallback(vision, FaceLandmarkerClass) {
   try {
-    return await FaceLandmarker.createFromOptions(vision, {
+    return await FaceLandmarkerClass.createFromOptions(vision, {
       baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: 'GPU' },
       runningMode: 'VIDEO',
       numFaces: 1,
@@ -61,7 +91,7 @@ async function createFaceLandmarkerWithFallback(vision) {
   } catch (gpuError) {
     console.warn('[HandDetection] GPU no disponible para rostro, intentando CPU:', gpuError)
 
-    return FaceLandmarker.createFromOptions(vision, {
+    return FaceLandmarkerClass.createFromOptions(vision, {
       baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: 'CPU' },
       runningMode: 'VIDEO',
       numFaces: 1,
@@ -105,35 +135,62 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
   const lastFaceDetectAtRef = useRef(0)
   const lastFaceResultRef   = useRef(null)
   const videoRef            = useRef(null)
+  const initPromiseRef      = useRef(null)
   const [ready, setReady]   = useState(false)
   const [error, setError]   = useState(null)
 
-  // ── 1. Inicializar modelos (solo una vez) ────────────────────────────────
+  // ── 1. Inicializar modelos solo cuando realmente se necesitan ─────────────
   useEffect(() => {
+    if (!enabled || handLandmarkerRef.current || initPromiseRef.current) return undefined
+
     let cancelled = false
 
     async function init() {
       try {
+        setError(null)
+        const {
+          HandLandmarker: HandLandmarkerClass,
+          FaceLandmarker: FaceLandmarkerClass,
+          FilesetResolver,
+        } = await import('@mediapipe/tasks-vision')
         const vision = await FilesetResolver.forVisionTasks(WASM_URL)
-        handLandmarkerRef.current = await createHandLandmarkerWithFallback(vision)
+        handLandmarkerRef.current = await createHandLandmarkerWithFallback(vision, HandLandmarkerClass)
 
         try {
-          faceLandmarkerRef.current = await createFaceLandmarkerWithFallback(vision)
+          faceLandmarkerRef.current = await createFaceLandmarkerWithFallback(vision, FaceLandmarkerClass)
         } catch (faceError) {
           console.warn('[HandDetection] FaceLandmarker no disponible:', faceError)
           faceLandmarkerRef.current = null
         }
 
-        if (!cancelled) setReady(true)
+        if (cancelled) {
+          try {
+            handLandmarkerRef.current?.close?.()
+          } catch {
+            // noop
+          }
+          try {
+            faceLandmarkerRef.current?.close?.()
+          } catch {
+            // noop
+          }
+          handLandmarkerRef.current = null
+          faceLandmarkerRef.current = null
+          return
+        }
+
+        setReady(true)
       } catch (err) {
         console.error('[HandDetection] Error al cargar modelos:', err)
         if (!cancelled) setError(err.message)
+      } finally {
+        initPromiseRef.current = null
       }
     }
 
-    init()
+    initPromiseRef.current = init()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   // ── 2. Loop de detección conjunta ──────────────────────────────────────────
   const startDetection = useCallback(() => {
@@ -162,23 +219,41 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
         }
 
         if (handResults.landmarks?.length > 0) {
-          const handLandmarks = handResults.landmarks[0]
-          const handWorldLandmarks = handResults.worldLandmarks?.[0] ?? null
-          const handedness =
-            handResults.handedness?.[0]?.[0] ??
-            handResults.handednesses?.[0]?.[0] ??
-            null
+          const detectedHands = handResults.landmarks
+            .map((landmarks, index) => {
+              const worldLandmarks = handResults.worldLandmarks?.[index] ?? null
+              const handedness =
+                handResults.handedness?.[index]?.[0] ??
+                handResults.handednesses?.[index]?.[0] ??
+                null
+
+              return {
+                landmarks,
+                worldLandmarks,
+                handedness,
+                bbox: computeHandBox(landmarks),
+                palmCenter: getPalmCenter(landmarks),
+              }
+            })
+            .sort((a, b) => (b.bbox?.area ?? 0) - (a.bbox?.area ?? 0))
+
+          const primaryHand = detectedHands[0]
+          const secondaryHand = detectedHands[1] ?? null
 
           const faceLandmarks = faceResults?.faceLandmarks?.[0] ?? null
           const faceAnchor = faceLandmarks
             ? computeFaceAnchor(faceLandmarks)
             : null
 
-          onLandmarks(handLandmarks, {
+          onLandmarks(primaryHand.landmarks, {
             faceAnchor,
             faceLandmarks,
-            handWorldLandmarks,
-            handedness,
+            handWorldLandmarks: primaryHand.worldLandmarks,
+            handedness: primaryHand.handedness,
+            hands: detectedHands,
+            handsCount: detectedHands.length,
+            secondaryHand,
+            secondaryPalmCenter: secondaryHand?.palmCenter ?? null,
           })
         }
       }
@@ -204,6 +279,25 @@ export function useHandDetection({ onLandmarks, enabled = true }) {
     else stopDetection()
     return stopDetection
   }, [ready, enabled, startDetection, stopDetection])
+
+  useEffect(() => {
+    return () => {
+      stopDetection()
+      try {
+        handLandmarkerRef.current?.close?.()
+      } catch {
+        // noop
+      }
+      try {
+        faceLandmarkerRef.current?.close?.()
+      } catch {
+        // noop
+      }
+      handLandmarkerRef.current = null
+      faceLandmarkerRef.current = null
+      initPromiseRef.current = null
+    }
+  }, [stopDetection])
 
   return { videoRef, ready, error }
 }
