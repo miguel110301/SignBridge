@@ -183,51 +183,41 @@ function analyzeOscillation(values, minSwingAmplitude) {
 }
 
 function detectHola(windowFrames, config) {
-  if (windowFrames.length < config.minFrames) return null
 
-  const validFrames = windowFrames.filter((frame) => frame.reliableHand && frame.nearHead)
-  if (validFrames.length < config.minFrames * config.minNearHeadRatio) return null
+  if (windowFrames.length < 5) return null
 
-  const nearHeadRatio = validFrames.length / windowFrames.length
-  const twoFingerRatio =
-    validFrames.filter((frame) => frame.twoFingerHandshape).length / validFrames.length
-  if (twoFingerRatio < config.minTwoFingerRatio) return null
+  const validFrames = windowFrames.filter((frame) => frame.reliableHand)
+  if (validFrames.length < 3) return null
 
-  const palmFacingRatio =
-    validFrames.filter((frame) => frame.palmFacingCamera).length / validFrames.length
-  if (palmFacingRatio < config.minPalmFacingRatio) return null
+  const firstFrame = validFrames[0]
+  const lastFrame = validFrames[validFrames.length - 1]
 
-  const xValues = validFrames.map((frame) => frame.palmCenter.x)
-  const rangeX = Math.max(...xValues) - Math.min(...xValues)
-  if (rangeX < config.minRangeX) return null
+  // Calculamos cuánto se movió en horizontal (X) y en vertical (Y)
+  const distanceX = Math.abs(lastFrame.palmCenter.x - firstFrame.palmCenter.x)
+  const distanceY = Math.abs(lastFrame.palmCenter.y - firstFrame.palmCenter.y)
 
-  const oscillation = analyzeOscillation(xValues, config.minSwingAmplitude)
-  if (oscillation.directionChanges < config.minDirectionChanges) return null
+  // Filtro 1: El movimiento debe ser intencional y largo
+  const isLongEnough = distanceX > 0.1
 
-  const confidence = Math.min(
-    0.99,
-    0.5 +
-      (nearHeadRatio * 0.18) +
-      (twoFingerRatio * 0.14) +
-      (palmFacingRatio * 0.12) +
-      Math.min(rangeX / config.minRangeX, 1) * 0.12 +
-      Math.min(oscillation.directionChanges / 2, 1) * 0.08
-  )
+  // Filtro 2: El movimiento debe ser principalmente horizontal.
+  // Si distanceY es muy alto (ej. subiendo la mano a la cabeza), esto da falso y lo ignora.
+  const isHorizontal = distanceX > (distanceY * 1.5)
 
-  return {
-    gesture: 'hola',
-    word: 'hola',
-    confidence,
-    debug: {
-      nearHeadRatio,
-      twoFingerRatio,
-      palmFacingRatio,
-      rangeX,
-      directionChanges: oscillation.directionChanges,
-      maxSwingAmplitude: oscillation.maxSwingAmplitude,
-      frameCount: windowFrames.length,
-    },
+  // Si cumple ambas, entonces sí es un "Hola"
+  if (isLongEnough && isHorizontal) { 
+    return {
+      gesture: 'hola',
+      word: 'hola',
+      confidence: 0.95,
+      debug: {
+        distanceX,
+        distanceY,
+        frameCount: windowFrames.length,
+      },
+    }
   }
+
+  return null
 }
 
 export function createGestureSequenceRecognizer() {
