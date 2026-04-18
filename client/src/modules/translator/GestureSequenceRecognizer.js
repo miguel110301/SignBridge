@@ -1,4 +1,6 @@
 import { DYNAMIC_GESTURE_MAP } from './SignMap.js'
+import { classifyDTW } from '../training/KNNClassifier.js'
+import { normalizeHand } from './HandNormalizer.js'
 
 const LM = {
   WRIST: 0,
@@ -40,13 +42,8 @@ function magnitude(v) {
   return Math.hypot(v.x, v.y, v.z || 0)
 }
 
-function average(values) {
-  if (!values.length) return 0
-  return values.reduce((s, v) => s + v, 0) / values.length
-}
-
-function getGestureConfig(gestureName) {
-  return DYNAMIC_GESTURE_MAP.find((g) => g.gesture === gestureName && g.implemented)?.config ?? null
+function getHolaConfig() {
+  return DYNAMIC_GESTURE_MAP.find((gesture) => gesture.gesture === 'hola')?.config
 }
 
 function isFingerOpen(landmarks, tipIndex, pipIndex) {
@@ -89,7 +86,7 @@ function pointInRect(point, rect) {
 
 function summarizeFrame(landmarks, frameMeta, timestamp, config) {
   const faceAnchor = frameMeta?.faceAnchor ?? null
-  const headZone = config ? computeHeadZone(faceAnchor, config) : null
+  const headZone = computeHeadZone(faceAnchor, config)
   const reliableHand = frameMeta?.handQuality?.reliable !== false
 
   const wrist = landmarks[LM.WRIST]
@@ -111,50 +108,35 @@ function summarizeFrame(landmarks, frameMeta, timestamp, config) {
   const middleOpen = isFingerOpen(landmarks, LM.MIDDLE_TIP, LM.MIDDLE_PIP)
   const ringOpen = isFingerOpen(landmarks, LM.RING_TIP, LM.RING_PIP)
   const pinkyOpen = isFingerOpen(landmarks, LM.PINKY_TIP, LM.PINKY_PIP)
-
   const fingerGap = dist(indexTip, middleTip)
-  const twoFingerHandshape = config
-    ? (
-        indexOpen &&
-        middleOpen &&
-        !ringOpen &&
-        !pinkyOpen &&
-        fingerGap >= config.minFingerGap &&
-        fingerGap <= config.maxFingerGap
-      )
-    : false
+  const twoFingerHandshape =
+    indexOpen &&
+    middleOpen &&
+    !ringOpen &&
+    !pinkyOpen &&
+    fingerGap >= config.minFingerGap &&
+    fingerGap <= config.maxFingerGap
 
-  // Pinky-only shape (for J gesture): only pinky extended
-  const pinkyOnlyShape = !indexOpen && !middleOpen && !ringOpen && pinkyOpen
-
-  // nearHead: use faceAnchor when available, fall back to top portion of frame
-  let fingertipsNearHead = false
-  if (faceAnchor && headZone) {
-    fingertipsNearHead =
-      pointInRect(indexTip, headZone) ||
-      pointInRect(middleTip, headZone) ||
-      pointInRect(palmCenter, headZone)
-  } else if (config?.headFallbackMaxY != null) {
-    // Fallback: upper portion of the frame treated as "near head"
-    fingertipsNearHead = indexTip.y < config.headFallbackMaxY && middleTip.y < config.headFallbackMaxY
-  }
+  const fingertipsNearHead =
+    pointInRect(indexTip, headZone) ||
+    pointInRect(middleTip, headZone) ||
+    pointInRect(palmCenter, headZone)
 
   const palmFacingScore = getPalmFacingScore(frameMeta?.handWorldLandmarks)
-  const palmFacingCamera = config ? palmFacingScore >= config.minFacingScore : false
+  const palmFacingCamera = palmFacingScore >= config.minFacingScore
 
   return {
     timestamp,
     palmCenter,
-    pinkyTip,
     faceAnchor,
     headZone,
     reliableHand,
-    nearHead: Boolean(fingertipsNearHead),
+    nearHead: Boolean(faceAnchor && fingertipsNearHead),
     twoFingerHandshape,
-    pinkyOnlyShape,
     fingerGap,
     palmFacingScore,
     palmFacingCamera,
+    canonical: normalizeHand(frameMeta?.handWorldLandmarks || landmarks)
   }
 }
 
@@ -248,100 +230,42 @@ function detectHola(windowFrames, config) {
   }
 }
 
-// J: pinky-only shape + downward motion + lateral hook at the end
-function detectJ(windowFrames, config) {
-  if (windowFrames.length < config.minFrames) return null
-
-  const jFrames = windowFrames.filter((frame) => frame.reliableHand && frame.pinkyOnlyShape)
-  if (jFrames.length < windowFrames.length * config.minJShapeRatio) return null
-
-  const yValues = jFrames.map((frame) => frame.pinkyTip?.y ?? frame.palmCenter.y)
-  const xValues = jFrames.map((frame) => frame.pinkyTip?.x ?? frame.palmCenter.x)
-
-  if (yValues.length < 4) return null
-
-  // Check for significant net downward motion (tip moves down = y increases in image)
-  const yStart = average(yValues.slice(0, Math.ceil(yValues.length * 0.35)))
-  const yEnd = average(yValues.slice(Math.floor(yValues.length * 0.65)))
-  const downwardMotion = yEnd - yStart  // positive = moved downward in image
-
-  if (downwardMotion < config.minDownwardMotion) return null
-
-  // Check the lateral hook in the last portion of the trajectory
-  const hookStart = Math.floor(xValues.length * 0.55)
-  const xLate = xValues.slice(hookStart)
-  if (xLate.length < 2) return null
-
-  const xLateFirst = average(xLate.slice(0, Math.ceil(xLate.length / 2)))
-  const xLateLast = average(xLate.slice(Math.floor(xLate.length / 2)))
-  const hookMotion = Math.abs(xLateLast - xLateFirst)
-
-  if (hookMotion < config.minHookMotion) return null
-
-  const confidence = Math.min(
-    0.99,
-    0.55 +
-      Math.min(downwardMotion / 0.12, 1) * 0.22 +
-      Math.min(hookMotion / 0.06, 1) * 0.15 +
-      Math.min(jFrames.length / windowFrames.length, 1) * 0.08
-  )
-
-  return {
-    gesture: 'lsm_j',
-    word: 'J',
-    confidence,
-    debug: {
-      downwardMotion,
-      hookMotion,
-      jFrameCount: jFrames.length,
-      totalFrames: windowFrames.length,
-    },
-  }
-}
-
 export function createGestureSequenceRecognizer() {
   const history = []
-  const holaConfig = getGestureConfig('hola')
-  const jConfig = getGestureConfig('lsm_j')
+  const holaConfig = getHolaConfig()
   let lastGestureAt = 0
-
-  const maxWindowMs = Math.max(holaConfig?.windowMs ?? 0, jConfig?.windowMs ?? 0, 1500)
 
   return {
     push(landmarks, frameMeta = {}, timestamp = Date.now()) {
-      // Use holaConfig for summarize parameters; fall back to jConfig if no hola
-      const summarizeConfig = holaConfig ?? jConfig ?? null
+      if (!holaConfig) {
+        return { gesture: null, suppressStatic: false, debug: null }
+      }
 
-      const frameSummary = summarizeFrame(landmarks, frameMeta, timestamp, summarizeConfig)
+      const frameSummary = summarizeFrame(landmarks, frameMeta, timestamp, holaConfig)
       history.push(frameSummary)
 
-      const oldestAllowed = timestamp - maxWindowMs
+      const oldestAllowed = timestamp - holaConfig.windowMs
       while (history.length > 0 && history[0].timestamp < oldestAllowed) {
         history.shift()
       }
 
-      // Suppress static classification when two-finger wave is actively forming
-      const suppressWindow = holaConfig
-        ? history.filter((frame) => timestamp - frame.timestamp <= holaConfig.suppressWindowMs)
-        : []
+      const suppressWindow = history.filter(
+        (frame) => timestamp - frame.timestamp <= holaConfig.suppressWindowMs
+      )
 
       const activeGestureFrames = suppressWindow.filter(
         (frame) => frame.reliableHand && frame.nearHead && frame.twoFingerHandshape
       )
 
-      const suppressStatic = holaConfig
-        ? (
-            activeGestureFrames.length >= 4 &&
-            (() => {
-              const xValues = activeGestureFrames.map((frame) => frame.palmCenter.x)
-              const rangeX = Math.max(...xValues) - Math.min(...xValues)
-              return rangeX >= holaConfig.minSuppressRangeX
-            })()
-          )
-        : false
+      const suppressStatic =
+        activeGestureFrames.length >= 4 &&
+        (() => {
+          const xValues = activeGestureFrames.map((frame) => frame.palmCenter.x)
+          const rangeX = Math.max(...xValues) - Math.min(...xValues)
+          return rangeX >= holaConfig.minSuppressRangeX
+        })()
 
-      // Cooldown: avoid firing the same gesture repeatedly
-      if (timestamp - lastGestureAt < Math.min(holaConfig?.cooldownMs ?? 9999, jConfig?.cooldownMs ?? 9999)) {
+      if (timestamp - lastGestureAt < holaConfig.cooldownMs) {
         return {
           gesture: null,
           suppressStatic,
@@ -349,40 +273,40 @@ export function createGestureSequenceRecognizer() {
         }
       }
 
-      // Try hola gesture first
-      if (holaConfig) {
-        const holaWindow = history.filter((frame) => timestamp - frame.timestamp <= holaConfig.windowMs)
-        const holaGesture = detectHola(holaWindow, holaConfig)
-        if (holaGesture) {
-          lastGestureAt = timestamp
-          history.length = 0
-          return {
-            gesture: holaGesture,
-            suppressStatic: true,
-            debug: buildDebugState(frameSummary, holaWindow, true, holaGesture.debug),
-          }
+      const dtwResult = classifyDTW(history)
+      if (dtwResult && dtwResult.confidence > 0.6) {
+        const historySnapshot = history.slice()
+        lastGestureAt = timestamp
+        history.length = 0
+        return {
+          gesture: {
+            gesture: dtwResult.gesture,
+            word: dtwResult.gesture,
+            confidence: dtwResult.confidence,
+            debug: { method: 'dtw', minDistance: dtwResult.minDistance }
+          },
+          suppressStatic: true,
+          debug: buildDebugState(frameSummary, historySnapshot, true, dtwResult),
         }
       }
 
-      // Try J gesture
-      if (jConfig) {
-        const jWindow = history.filter((frame) => timestamp - frame.timestamp <= jConfig.windowMs)
-        const jGesture = detectJ(jWindow, jConfig)
-        if (jGesture) {
-          lastGestureAt = timestamp
-          history.length = 0
-          return {
-            gesture: jGesture,
-            suppressStatic: true,
-            debug: buildDebugState(frameSummary, history, true, jGesture.debug),
-          }
+      const gesture = detectHola(history, holaConfig)
+      if (!gesture) {
+        return {
+          gesture: null,
+          suppressStatic,
+          debug: buildDebugState(frameSummary, history, suppressStatic, null),
         }
       }
+
+      const historySnapshot = history.slice()
+      lastGestureAt = timestamp
+      history.length = 0
 
       return {
-        gesture: null,
-        suppressStatic,
-        debug: buildDebugState(frameSummary, history, suppressStatic, null),
+        gesture,
+        suppressStatic: true,
+        debug: buildDebugState(frameSummary, historySnapshot, true, gesture.debug),
       }
     },
     reset() {
@@ -398,7 +322,6 @@ function buildDebugState(currentFrame, history, suppressStatic, detectionDebug) 
   const rangeX = xValues.length > 0 ? Math.max(...xValues) - Math.min(...xValues) : 0
   const nearHeadCount = recent.filter((frame) => frame.nearHead).length
   const twoFingerCount = recent.filter((frame) => frame.twoFingerHandshape).length
-  const pinkyOnlyCount = recent.filter((frame) => frame.pinkyOnlyShape).length
   const palmFacingCount = recent.filter((frame) => frame.palmFacingCamera).length
   const reliableCount = recent.filter((frame) => frame.reliableHand).length
 
@@ -408,7 +331,6 @@ function buildDebugState(currentFrame, history, suppressStatic, detectionDebug) 
     recentRangeX: rangeX,
     nearHeadRatio: recent.length ? nearHeadCount / recent.length : 0,
     twoFingerRatio: recent.length ? twoFingerCount / recent.length : 0,
-    pinkyOnlyRatio: recent.length ? pinkyOnlyCount / recent.length : 0,
     palmFacingRatio: recent.length ? palmFacingCount / recent.length : 0,
     reliableRatio: recent.length ? reliableCount / recent.length : 0,
     suppressStatic,

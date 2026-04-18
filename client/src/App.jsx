@@ -2,6 +2,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import TranslatorPage from './modules/translator/TranslatorPage.jsx'
 import PracticePage   from './modules/practice/PracticePage.jsx'
 import LandingPage    from './modules/landing/LandingPage.jsx'
+import TrainingPage   from './modules/training/TrainingPage.jsx'
 
 export default function App() {
   const location = useLocation()
@@ -31,6 +32,14 @@ export default function App() {
             >
               Practica
             </NavLink>
+            <NavLink
+              to="/entrenamiento"
+              className={({ isActive }) =>
+                isActive ? 'font-medium text-white' : 'text-emerald-400 transition-colors hover:text-emerald-300'
+              }
+            >
+              Entrenamiento
+            </NavLink>
           </div>
         </nav>
       )}
@@ -40,6 +49,7 @@ export default function App() {
           <Route path="/"           element={<LandingPage />} />
           <Route path="/traductor"  element={<TranslatorPage />} />
           <Route path="/practica"   element={<PracticePage />} />
+          <Route path="/entrenamiento" element={<TrainingPage />} />
         </Routes>
       </main>
     </div>

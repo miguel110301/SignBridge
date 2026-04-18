@@ -30,7 +30,7 @@ export default function HandDetector({ onSignDetected, enabled = true }) {
   // Callback que recibe los 21 landmarks de MediaPipe
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     // 1. Clasificar la seña
-    const raw = classifySign(landmarks, { handedness: frameMeta.handedness })
+    const raw = classifySign(landmarks, frameMeta)
 
     // 2. Suavizar para evitar parpadeo
     const stable = smootherRef.current.push(raw)

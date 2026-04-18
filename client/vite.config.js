@@ -1,9 +1,10 @@
+import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const env = loadEnv(mode, path.resolve(process.cwd(), '..'), '')
   const tunnelHost = env.VITE_TUNNEL_HOST?.trim()
 
   const allowedHosts = [
@@ -19,6 +20,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    envDir: '../',
     plugins: [
       react(),
       VitePWA({

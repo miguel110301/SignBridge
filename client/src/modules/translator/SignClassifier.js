@@ -1,5 +1,6 @@
 import { extractHandFeatures } from './HandFeatureExtractor.js'
 import { classifyStaticLSM } from './StaticLSMClassifier.js'
+import { classifyKNN } from '../training/KNNClassifier.js'
 
 const HAND_QUALITY_EDGE_MARGIN = 0.04
 const SMOOTHER_MIN_RATIO = 0.7
@@ -8,59 +9,72 @@ function formatFingerBit(value) {
   return value >= 0.75 ? 1 : value >= 0.35 ? 0.5 : 0
 }
 
-export function extractHandMetrics(landmarks) {
-  const features = extractHandFeatures(landmarks)
+export function extractHandMetrics(landmarks, meta = {}) {
+  const worldLandmarks = meta.worldLandmarks || meta.handWorldLandmarks
+  const features = extractHandFeatures(landmarks, worldLandmarks)
   if (!features) return null
 
-  const classification = classifyStaticLSM(features)
+  let classification = classifyStaticLSM(features)
+  
+  // Intervención KNN
+  const knnResult = classifyKNN(features.points)
+  if (knnResult && knnResult.bestCandidate.confidence >= 0.70) {
+    classification = knnResult
+  }
 
   return {
     features,
     classification,
     fingers: {
-      thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.directions.T },
-      index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.directions.I },
-      middle: { state: features.fingers.M, extended: features.fingers.M >= 0.75, direction: features.directions.M },
-      ring: { state: features.fingers.R, extended: features.fingers.R >= 0.75, direction: features.directions.R },
-      pinky: { state: features.fingers.P, extended: features.fingers.P >= 0.75, direction: features.directions.P },
+      thumb: { state: features.fingers.T, extended: features.fingers.T >= 0.75, direction: features.camera_directions.T, localDirection: features.directions.T },
+      index: { state: features.fingers.I, extended: features.fingers.I >= 0.75, direction: features.camera_directions.I, localDirection: features.directions.I },
+      middle: { state: features.fingers.M, extended: features.fingers.M >= 0.75, direction: features.camera_directions.M, localDirection: features.directions.M },
+      ring: { state: features.fingers.R, extended: features.fingers.R >= 0.75, direction: features.camera_directions.R, localDirection: features.directions.R },
+      pinky: { state: features.fingers.P, extended: features.fingers.P >= 0.75, direction: features.camera_directions.P, localDirection: features.directions.P },
     },
-    directions: features.directions,
-    worldDirections: features.worldDirections,
-    handOrientation: features.handOrientation,
+    directions: {
+      camera: features.camera_directions,
+      local: features.directions,
+    },
     pairs: {
       indexMiddle: {
         gap: features.gap_IM,
-        horizontal: features.directions.I === 'horizontal' && features.directions.M === 'horizontal',
-        vertical: features.directions.I === 'up' && features.directions.M === 'up',
+        horizontal: features.camera_directions.I === 'horizontal' && features.camera_directions.M === 'horizontal',
+        vertical: features.camera_directions.I === 'up' && features.camera_directions.M === 'up',
         crossed: features.crossed_IM,
+        localHorizontal: features.directions.I === 'horizontal' && features.directions.M === 'horizontal',
+        localVertical: features.directions.I === 'up' && features.directions.M === 'up',
       },
       middleRing: {
         gap: features.gap_MR,
-        horizontal: features.directions.M === 'horizontal' && features.directions.R === 'horizontal',
-        vertical: features.directions.M === 'up' && features.directions.R === 'up',
-        crossed: features.crossed_MR,
-      },
-      ringPinky: {
-        gap: features.gap_RP,
+        horizontal: features.camera_directions.M === 'horizontal' && features.camera_directions.R === 'horizontal',
+        vertical: features.camera_directions.M === 'up' && features.camera_directions.R === 'up',
+        localHorizontal: features.directions.M === 'horizontal' && features.directions.R === 'horizontal',
+        localVertical: features.directions.M === 'up' && features.directions.R === 'up',
       },
     },
     relations: {
       thumbRole: features.thumb_role,
       crossedIM: features.crossed_IM,
-      crossedMR: features.crossed_MR,
       pinchTI: features.pinch_TI,
       pinchTM: features.pinch_TM,
+      palmOrientation: features.palm_orientation,
     },
     posture: {
       palmCenter: features.palmCenter,
       nonThumbExtendedCount: features.meta.nonThumbExtendedCount,
       nonThumbClosedCount: features.meta.nonThumbClosedCount,
     },
+    orientation: {
+      palmOrientation: features.palm_orientation,
+      palmNormal: features.palm_normal,
+      axes: features.axes,
+    },
   }
 }
 
-export function debugFingers(landmarks) {
-  const metrics = extractHandMetrics(landmarks)
+export function debugFingers(landmarks, meta = {}) {
+  const metrics = extractHandMetrics(landmarks, meta)
   if (!metrics) return 'T:- I:- M:- R:- P:- gap:-'
 
   const { features } = metrics
@@ -71,6 +85,7 @@ export function debugFingers(landmarks) {
     `R:${formatFingerBit(features.fingers.R)}`,
     `P:${formatFingerBit(features.fingers.P)}`,
     `gap:${features.gap_IM.toFixed(2)}`,
+    `orien:${features.palm_orientation}`,
   ].join(' ')
 }
 
@@ -104,10 +119,9 @@ export function assessHandDetectionQuality(landmarks) {
     point.y > 1 - HAND_QUALITY_EDGE_MARGIN
   )).length
 
-  // Thresholds lowered to support hands farther from the camera
-  const sizeScore = Math.max(0, Math.min(1, (area - 0.007) / 0.093))
-  const widthScore = Math.max(0, Math.min(1, (width - 0.07) / 0.25))
-  const heightScore = Math.max(0, Math.min(1, (height - 0.06) / 0.32))
+  const sizeScore = Math.max(0, Math.min(1, (area - 0.015) / 0.085))
+  const widthScore = Math.max(0, Math.min(1, (width - 0.1) / 0.22))
+  const heightScore = Math.max(0, Math.min(1, (height - 0.1) / 0.28))
   const edgeScore = Math.max(0, 1 - (edgeTouches / 6))
 
   const qualityScore =
@@ -118,9 +132,9 @@ export function assessHandDetectionQuality(landmarks) {
 
   const reasons = []
   if (edgeTouches >= 5) reasons.push('mano_recortada')
-  if (area < 0.01) reasons.push('mano_pequena')
-  if (width < 0.08) reasons.push('poco_ancho')
-  if (height < 0.07) reasons.push('poco_alto')
+  if (area < 0.02) reasons.push('mano_pequena')
+  if (width < 0.11) reasons.push('poco_ancho')
+  if (height < 0.11) reasons.push('poco_alto')
   if (qualityScore < 0.44) reasons.push('landmarks_inestables')
 
   const status =
@@ -148,19 +162,16 @@ export function assessHandDetectionQuality(landmarks) {
   }
 }
 
-export function classifySign(landmarks) {
-  const features = extractHandFeatures(landmarks)
-  if (!features) return null
-
-  const classification = classifyStaticLSM(features)
-  if (!classification.bestCandidate) return null
+export function classifySign(landmarks, meta = {}) {
+  const metrics = extractHandMetrics(landmarks, meta)
+  if (!metrics || !metrics.classification.bestCandidate) return null
 
   return {
-    letter: classification.bestCandidate.letter,
-    confidence: classification.bestCandidate.confidence,
-    candidates: classification.topCandidates,
-    classifierDebug: classification,
-    secondCandidateFailure: classification.topCandidates[1]?.failedRule ?? null,
+    letter: metrics.classification.bestCandidate.letter,
+    confidence: metrics.classification.bestCandidate.confidence,
+    candidates: metrics.classification.topCandidates,
+    classifierDebug: metrics.classification,
+    secondCandidateFailure: metrics.classification.topCandidates[1]?.failedRule ?? null,
   }
 }
 

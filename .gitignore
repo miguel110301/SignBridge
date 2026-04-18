@@ -8,3 +8,4 @@ dist/
 .DS_Store
 server/.env
 npm-debug.log*
+.env

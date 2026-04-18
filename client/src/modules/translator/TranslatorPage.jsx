@@ -10,6 +10,8 @@ import {
 import { SIGN_LANGUAGE_PROFILE } from './SignMap.js'
 import { decodeFingerSpelling } from './SpellingDecoder.js'
 import { createGestureSequenceRecognizer } from './GestureSequenceRecognizer.js'
+import { requestCameraStream } from '../../utils/cameraStream.js'
+import { hydrateTemplatesFromServer } from '../training/KNNStorage.js'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -87,6 +89,31 @@ function formatTopCandidates(candidates = []) {
     .join(' ')
 }
 
+function shortDirection(direction) {
+  if (direction === 'horizontal') return 'h'
+  if (direction === 'up') return 'u'
+  if (direction === 'down') return 'd'
+  return '—'
+}
+
+function formatDirectionMap(directionMap) {
+  if (!directionMap) return '—'
+
+  return ['T', 'I', 'M', 'R', 'P']
+    .map((key) => `${key}:${shortDirection(directionMap[key])}`)
+    .join(' ')
+}
+
+function formatVector2(vector) {
+  if (!vector) return '(—, —)'
+  return `(${vector.x.toFixed(2)},${vector.y.toFixed(2)})`
+}
+
+function formatVector3(vector) {
+  if (!vector) return '(—, —, —)'
+  return `(${vector.x.toFixed(2)},${vector.y.toFixed(2)},${vector.z.toFixed(2)})`
+}
+
 function inferMirrorPreview(track) {
   if (!track) return false
 
@@ -133,43 +160,7 @@ function getCameraErrorMessage(error) {
 }
 
 async function requestRearCamera() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Este navegador no soporta acceso a camara.')
-  }
-
-  const attempts = [
-    {
-      audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 720 },
-        height: { ideal: 1280 },
-        aspectRatio: { ideal: 9 / 16 },
-      },
-    },
-    {
-      audio: false,
-      video: {
-        facingMode: 'environment',
-      },
-    },
-    {
-      audio: false,
-      video: true,
-    },
-  ]
-
-  let lastError = null
-
-  for (const constraints of attempts) {
-    try {
-      return await navigator.mediaDevices.getUserMedia(constraints)
-    } catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError || new Error('No se pudo iniciar la camara.')
+  return requestCameraStream({ preferredFacingMode: 'environment' })
 }
 
 function clearDebugCanvas(canvas) {
@@ -233,7 +224,9 @@ function createCanvasProjection(canvas, video) {
 
   const sourceWidth = video?.videoWidth || width
   const sourceHeight = video?.videoHeight || height
-  const scale = Math.max(width / sourceWidth, height / sourceHeight)
+  // Igual que en Entrenamiento: no recortamos el video para que
+  // el preview corresponda al encuadre real que ve MediaPipe.
+  const scale = Math.min(width / sourceWidth, height / sourceHeight)
   const renderWidth = sourceWidth * scale
   const renderHeight = sourceHeight * scale
   const offsetX = (width - renderWidth) / 2
@@ -414,6 +407,50 @@ function drawFaceDebug(ctx, projection, faceLandmarks, faceAnchor) {
   }
 }
 
+function drawHandAxes(ctx, projection, rawPalmCenter, handMetrics) {
+  const screenAxes = handMetrics?.orientation?.axes?.screen
+  if (!screenAxes?.x || !screenAxes?.y) return
+
+  const palmCenter = toCanvasPoint(rawPalmCenter, projection)
+  const axisLength = 56
+
+  drawArrow(
+    ctx,
+    palmCenter,
+    {
+      x: palmCenter.x + (screenAxes.x.x * axisLength),
+      y: palmCenter.y + (screenAxes.x.y * axisLength),
+    },
+    '#f97316',
+    'X'
+  )
+
+  drawArrow(
+    ctx,
+    palmCenter,
+    {
+      x: palmCenter.x + (screenAxes.y.x * axisLength),
+      y: palmCenter.y + (screenAxes.y.y * axisLength),
+    },
+    '#22d3ee',
+    'Y'
+  )
+
+  const palmNormal = handMetrics?.orientation?.palmNormal
+  if (palmNormal) {
+    drawArrow(
+      ctx,
+      palmCenter,
+      {
+        x: palmCenter.x + (palmNormal.x * 34),
+        y: palmCenter.y + (palmNormal.y * 34),
+      },
+      '#e879f9',
+      `N z:${palmNormal.z.toFixed(2)}`
+    )
+  }
+}
+
 function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
   if (!canvas) return
 
@@ -509,6 +546,7 @@ function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
     ctx.fill()
     ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText('PALM', palmCenter.x + 8, palmCenter.y + 4)
+    drawHandAxes(ctx, projection, rawPalmCenter, handMetrics)
   }
 
   if (gestureDebug?.currentFrame?.palmCenter) {
@@ -658,14 +696,17 @@ export default function TranslatorPage() {
         ? {
             gapIM: debugFrame.handMetrics.features.gap_IM,
             crossedIM: debugFrame.handMetrics.features.crossed_IM,
-            crossedMR: debugFrame.handMetrics.features.crossed_MR,
             thumbRole: debugFrame.handMetrics.features.thumb_role,
-            worldDirI: debugFrame.handMetrics.features.worldDirections?.I ?? null,
-            worldDirM: debugFrame.handMetrics.features.worldDirections?.M ?? null,
-            tiltAngle: debugFrame.handMetrics.features.handOrientation?.tiltAngle ?? null,
-            isLateral: debugFrame.handMetrics.features.handOrientation?.isLateral ?? null,
+            palmOrientation: debugFrame.handMetrics.features.palm_orientation,
           }
         : null,
+      directionState: {
+        camera: debugFrame.handMetrics?.directions?.camera ?? null,
+        local: debugFrame.handMetrics?.directions?.local ?? null,
+        palmNormal: debugFrame.handMetrics?.orientation?.palmNormal ?? null,
+        palmOrientation: debugFrame.handMetrics?.orientation?.palmOrientation ?? null,
+        screenAxes: debugFrame.handMetrics?.orientation?.axes?.screen ?? null,
+      },
       palmCenter: debugFrame.handMetrics?.posture?.palmCenter ?? null,
       handQuality: debugFrame.handQuality ?? null,
       staticPose: debugFrame.staticPose ?? null,
@@ -923,7 +964,7 @@ export default function TranslatorPage() {
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     const now = Date.now()
     const handedness = getHandednessLabel(frameMeta.handedness)
-    const handMetrics = extractHandMetrics(landmarks, { handedness })
+    const handMetrics = extractHandMetrics(landmarks, { handedness, worldLandmarks: frameMeta.handWorldLandmarks })
     const handQuality = assessHandDetectionQuality(landmarks)
     const staticPose = pushStaticPoseSample(staticPoseHistoryRef, landmarks, now)
     const enrichedFrameMeta = {
@@ -1067,6 +1108,12 @@ export default function TranslatorPage() {
   }, [])
 
   useEffect(() => {
+    hydrateTemplatesFromServer().catch((error) => {
+      console.warn('[Translator] No se pudo hidratar dataset desde MongoDB; se usará cache local.', error)
+    })
+  }, [])
+
+  useEffect(() => {
     if (!isActive) {
       stopCameraStream()
       clearAudioQueue()
@@ -1196,7 +1243,7 @@ export default function TranslatorPage() {
     <section className="relative h-full min-h-[100dvh] overflow-hidden bg-black">
       <video
         ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
           cameraReady ? 'opacity-100' : 'opacity-0'
         }`}
         style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
@@ -1338,9 +1385,11 @@ export default function TranslatorPage() {
               <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
               <p>motivo:{debugSnapshot.handQuality?.reasons?.length ? debugSnapshot.handQuality.reasons.map(formatQualityReason).join(', ') : 'ok'}</p>
               <p>estado:{debugSnapshot.fingerDebugString ?? '—'}</p>
+              <p>cam:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
+              <p>loc:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+              <p>palm:{debugSnapshot.directionState?.palmOrientation ?? '—'} n:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
               <p>top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}</p>
-              <p>gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(2) ?? '—'} xIM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}</p>
-              <p>wI:{debugSnapshot.featureState?.worldDirI ?? '—'} tilt:{debugSnapshot.featureState?.tiltAngle?.toFixed(0) ?? '—'}° lat:{debugSnapshot.featureState?.isLateral ? '1' : '0'}</p>
+              <p>gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(2) ?? '—'} crossed:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}</p>
               <p>2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}</p>
               <p>hola head:{currentGestureFrame?.nearHead ? '1' : '0'} 2F:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'} palm:{currentGestureFrame?.palmFacingCamera ? '1' : '0'}</p>
             </div>
@@ -1385,10 +1434,7 @@ export default function TranslatorPage() {
                 top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}
               </p>
               <p className="mt-2 font-mono">
-                gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} xIM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} xMR:{debugSnapshot.featureState?.crossedMR ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}
-              </p>
-              <p className="mt-2 font-mono">
-                wI:{debugSnapshot.featureState?.worldDirI ?? '—'} wM:{debugSnapshot.featureState?.worldDirM ?? '—'} tilt:{debugSnapshot.featureState?.tiltAngle?.toFixed(0) ?? '—'}° lat:{debugSnapshot.featureState?.isLateral ? '1' : '0'}
+                gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} crossed_IM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb_role:{debugSnapshot.featureState?.thumbRole ?? '—'} palm:{debugSnapshot.featureState?.palmOrientation ?? '—'}
               </p>
               <p className="mt-2 font-mono text-amber-200">
                 2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}
@@ -1396,21 +1442,26 @@ export default function TranslatorPage() {
             </div>
 
             <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">Gestos (hola / J)</p>
+              <p className="font-semibold text-white">Ejes / orientacion</p>
               <div className="mt-2 space-y-1 font-mono">
-                <p>nearHead:{currentGestureFrame?.nearHead ? '1' : '0'} 2F:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'} pinkyOnly:{currentGestureFrame?.pinkyOnlyShape ? '1' : '0'}</p>
+                <p>camDir:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
+                <p>locDir:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+                <p>axisX:{formatVector2(debugSnapshot.directionState?.screenAxes?.x)} axisY:{formatVector2(debugSnapshot.directionState?.screenAxes?.y)}</p>
+                <p>normal:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Gesto hola</p>
+              <div className="mt-2 space-y-1 font-mono">
+                <p>nearHead:{currentGestureFrame?.nearHead ? '1' : '0'} twoFinger:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'}</p>
                 <p>palmFacing:{currentGestureFrame?.palmFacingCamera ? '1' : '0'} score:{currentGestureFrame?.palmFacingScore?.toFixed(3) ?? '—'}</p>
-                <p>ratioHead:{gestureDebug?.nearHeadRatio?.toFixed(2) ?? '—'} ratio2F:{gestureDebug?.twoFingerRatio?.toFixed(2) ?? '—'} ratioPinky:{gestureDebug?.pinkyOnlyRatio?.toFixed(2) ?? '—'}</p>
+                <p>ratioHead:{gestureDebug?.nearHeadRatio?.toFixed(2) ?? '—'} ratio2F:{gestureDebug?.twoFingerRatio?.toFixed(2) ?? '—'}</p>
                 <p>ratioPalm:{gestureDebug?.palmFacingRatio?.toFixed(2) ?? '—'} ratioOk:{gestureDebug?.reliableRatio?.toFixed(2) ?? '—'}</p>
                 <p>rangeX:{gestureDebug?.recentRangeX?.toFixed(3) ?? '—'} frames:{gestureDebug?.frameCount ?? 0} suppress:{gestureDebug?.suppressStatic ? '1' : '0'}</p>
                 {gestureDebug?.detectionDebug && (
                   <p className="text-emerald-200">
-                    detectado
-                    {gestureDebug.detectionDebug?.nearHeadRatio != null
-                      ? ` hola conf:${gestureDebug.detectionDebug.nearHeadRatio.toFixed(2)} swing:${gestureDebug.detectionDebug.maxSwingAmplitude?.toFixed(3)}`
-                      : gestureDebug.detectionDebug?.downwardMotion != null
-                        ? ` J down:${gestureDebug.detectionDebug.downwardMotion.toFixed(3)} hook:${gestureDebug.detectionDebug.hookMotion?.toFixed(3)}`
-                        : ''}
+                    detectado conf:{gestureDebug.detectionDebug?.nearHeadRatio?.toFixed(2) ?? '—'} swing:{gestureDebug.detectionDebug?.maxSwingAmplitude?.toFixed(3) ?? '—'}
                   </p>
                 )}
               </div>
