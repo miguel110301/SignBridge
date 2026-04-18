@@ -3,7 +3,8 @@ import { classifyStaticLSM } from './StaticLSMClassifier.js'
 import { classifyKNN } from './KNNClassifier.js'
 
 const HAND_QUALITY_EDGE_MARGIN = 0.04
-const SMOOTHER_MIN_RATIO = 0.7
+const FINAL_CLASSIFICATION_MIN_CONFIDENCE = 0.72
+const FINAL_CLASSIFICATION_MIN_MARGIN = 0.06
 
 function formatFingerBit(value) {
   return value >= 0.75 ? 1 : value >= 0.35 ? 0.5 : 0
@@ -42,7 +43,6 @@ function combineClassification(staticClassification, knnClassification) {
         staticMargin,
         agreement: false,
         knnRejectedReason: 'outside_static_top3',
-        knnScope: 'static_top3',
       },
     }
   }
@@ -291,18 +291,66 @@ export function assessHandDetectionQuality(landmarks) {
 
 export function classifySign(landmarks, meta = {}) {
   const metrics = extractHandMetrics(landmarks, meta)
-  if (!metrics || !metrics.classification?.bestCandidate) return null
+  if (!metrics || !metrics.classification.bestCandidate) return null
+
+  const topCandidates = metrics.classification.topCandidates ?? []
+  const secondCandidate = topCandidates[1] ?? null
+  const candidateMargin =
+    secondCandidate
+      ? metrics.classification.bestCandidate.confidence - secondCandidate.confidence
+      : metrics.classification.bestCandidate.confidence
+
+  if (
+    metrics.classification.bestCandidate.confidence < FINAL_CLASSIFICATION_MIN_CONFIDENCE ||
+    candidateMargin < FINAL_CLASSIFICATION_MIN_MARGIN
+  ) {
+    return null
+  }
+
+  let predictedLetter = metrics.classification.bestCandidate.letter
+
+  // --- HACKATHON OVERRIDES ---
+  // 1. Correccion W vs B
+  if (
+    predictedLetter === 'W' ||
+    predictedLetter === 'B' ||
+    predictedLetter === 'w' ||
+    predictedLetter === 'b'
+  ) {
+    // Si el meñique (P) esta muy extendido (> 0.70), forzamos a que sea B
+    if (metrics.features.fingers.P >= 0.7) {
+      predictedLetter = 'B'
+    } else {
+      predictedLetter = 'W'
+    }
+  }
+
+  // 2. Correccion S vs T (Ambas son punos, pero en la T el pulgar sube mas)
+  if (
+    predictedLetter === 'S' ||
+    predictedLetter === 'T' ||
+    predictedLetter === 's' ||
+    predictedLetter === 't'
+  ) {
+    // En MediaPipe, Y crece hacia abajo. Si el pulgar esta mas "arriba" (menor Y), es T.
+    if (landmarks?.[4]?.y < landmarks?.[5]?.y) {
+      predictedLetter = 'T'
+    } else {
+      predictedLetter = 'S'
+    }
+  }
+  // ---------------------------
 
   return {
-    letter: metrics.classification.bestCandidate.letter,
+    letter: predictedLetter,
     confidence: metrics.classification.bestCandidate.confidence,
-    candidates: metrics.classification.topCandidates,
+    candidates: topCandidates,
     classifierDebug: metrics.classification,
-    secondCandidateFailure: metrics.classification.topCandidates?.[1]?.failedRule ?? null,
+    secondCandidateFailure: secondCandidate?.failedRule ?? null,
   }
 }
 
-export function createSmoother(windowSize = 8) {
+export function createSmoother(windowSize = 15) {
   const buffer = []
 
   return {
@@ -321,7 +369,7 @@ export function createSmoother(windowSize = 8) {
       if (!topLetter) return null
 
       const ratio = topLetter[1] / buffer.length
-      if (ratio >= SMOOTHER_MIN_RATIO) {
+      if (ratio >= 0.85) {
         return {
           letter: topLetter[0],
           confidence: ratio,

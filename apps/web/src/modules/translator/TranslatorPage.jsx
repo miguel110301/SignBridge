@@ -13,7 +13,6 @@ import {
 import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition.js'
 import { requestCameraStream } from '../../utils/cameraStream.js'
-import { useI18n } from '../../i18n/I18nProvider.jsx'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -29,6 +28,9 @@ const STATIC_POSE_MIN_FRAMES = 3
 const STATIC_POSE_MAX_TRAVEL = 0.05
 const STATIC_POSE_MAX_RANGE = 0.09
 const MIN_STATIC_CONFIDENCE = 0.7
+const MIN_STATIC_MARGIN = 0.14
+const LETTER_RELEASE_MS = 180
+const GESTURE_LOCK_MS = 700
 const TRANSLATION_MODE = {
   SIGN_TO_VOICE: 'sign_to_voice',
   VOICE_TO_SIGN: 'voice_to_sign',
@@ -77,7 +79,7 @@ function VoiceToSignPreview({ text, placeholder, compact = false }) {
 
   if (!words.length) {
     return (
-      <p className="font-readable text-sm leading-relaxed text-slate-400 sm:text-base">
+      <p className="font-readable text-sm leading-relaxed text-zinc-400 sm:text-base">
         {placeholder}
       </p>
     )
@@ -158,6 +160,14 @@ function formatVector2(vector) {
 function formatVector3(vector) {
   if (!vector) return '(—, —, —)'
   return `(${vector.x.toFixed(2)},${vector.y.toFixed(2)},${vector.z.toFixed(2)})`
+}
+
+function formatFingerVectors(vectorMap) {
+  if (!vectorMap) return '—'
+
+  return ['T', 'I', 'M', 'R', 'P']
+    .map((key) => `${key}:${formatVector2(vectorMap[key])}`)
+    .join(' ')
 }
 
 function inferMirrorPreview(track) {
@@ -396,6 +406,55 @@ function getHandQualityStroke(handQuality) {
   }
 }
 
+function drawHandBox(ctx, projection, bbox, colors) {
+  if (!bbox) return
+
+  const leftTop = toCanvasPoint({ x: bbox.minX, y: bbox.minY }, projection)
+  const rightBottom = toCanvasPoint({ x: bbox.maxX, y: bbox.maxY }, projection)
+  ctx.strokeStyle = colors.stroke
+  ctx.fillStyle = colors.fill
+  ctx.lineWidth = 2
+  ctx.fillRect(
+    leftTop.x,
+    leftTop.y,
+    rightBottom.x - leftTop.x,
+    rightBottom.y - leftTop.y
+  )
+  ctx.strokeRect(
+    leftTop.x,
+    leftTop.y,
+    rightBottom.x - leftTop.x,
+    rightBottom.y - leftTop.y
+  )
+}
+
+function drawHandSkeleton(ctx, projection, handLandmarks, color) {
+  if (!handLandmarks?.length) return
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  for (const [fromIndex, toIndex] of HAND_CONNECTIONS) {
+    const from = toCanvasPoint(handLandmarks[fromIndex], projection)
+    const to = toCanvasPoint(handLandmarks[toIndex], projection)
+    ctx.beginPath()
+    ctx.moveTo(from.x, from.y)
+    ctx.lineTo(to.x, to.y)
+    ctx.stroke()
+  }
+
+  handLandmarks.forEach((point, index) => {
+    const projected = toCanvasPoint(point, projection)
+    ctx.fillStyle = index === 0 ? '#f97316' : '#f8fafc'
+    ctx.beginPath()
+    ctx.arc(projected.x, projected.y, index === 0 ? 5 : 4, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.fillStyle = color
+    ctx.fillText(String(index), projected.x + 6, projected.y - 4)
+  })
+}
+
 function drawFaceDebug(ctx, projection, faceLandmarks, faceAnchor) {
   if (!faceLandmarks?.length && !faceAnchor) return
 
@@ -525,49 +584,25 @@ function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
     ctx.setLineDash([])
   }
 
-  if (handQuality?.bbox) {
-    const bbox = handQuality.bbox
-    const leftTop = toCanvasPoint({ x: bbox.minX, y: bbox.minY }, projection)
-    const rightBottom = toCanvasPoint({ x: bbox.maxX, y: bbox.maxY }, projection)
-    const qualityStroke = getHandQualityStroke(handQuality)
-    ctx.strokeStyle = qualityStroke.stroke
-    ctx.fillStyle = qualityStroke.fill
-    ctx.lineWidth = 2
-    ctx.fillRect(
-      leftTop.x,
-      leftTop.y,
-      rightBottom.x - leftTop.x,
-      rightBottom.y - leftTop.y
+  const hands = frameMeta.hands?.length
+    ? frameMeta.hands
+    : [{ landmarks, bbox: handQuality?.bbox }]
+
+  hands.forEach((hand, handIndex) => {
+    const colors = handIndex === 0
+      ? getHandQualityStroke(handQuality)
+      : {
+          stroke: 'rgba(96, 165, 250, 0.95)',
+          fill: 'rgba(96, 165, 250, 0.06)',
+        }
+
+    drawHandBox(ctx, projection, hand.bbox, colors)
+    drawHandSkeleton(
+      ctx,
+      projection,
+      hand.landmarks,
+      handIndex === 0 ? 'rgba(34, 197, 94, 0.75)' : 'rgba(96, 165, 250, 0.85)'
     )
-    ctx.strokeRect(
-      leftTop.x,
-      leftTop.y,
-      rightBottom.x - leftTop.x,
-      rightBottom.y - leftTop.y
-    )
-  }
-
-  ctx.strokeStyle = 'rgba(34, 197, 94, 0.75)'
-  ctx.lineWidth = 2
-  for (const [fromIndex, toIndex] of HAND_CONNECTIONS) {
-    const from = toCanvasPoint(landmarks[fromIndex], projection)
-    const to = toCanvasPoint(landmarks[toIndex], projection)
-    ctx.beginPath()
-    ctx.moveTo(from.x, from.y)
-    ctx.lineTo(to.x, to.y)
-    ctx.stroke()
-  }
-
-  landmarks.forEach((point, index) => {
-    const projected = toCanvasPoint(point, projection)
-    ctx.fillStyle = index === 0 ? '#f97316' : '#f8fafc'
-    ctx.beginPath()
-    ctx.arc(projected.x, projected.y, index === 0 ? 5 : 4, 0, Math.PI * 2)
-    ctx.fill()
-
-    ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
-    ctx.fillStyle = '#facc15'
-    ctx.fillText(String(index), projected.x + 6, projected.y - 4)
   })
 
   const vectorSpecs = [
@@ -615,10 +650,11 @@ function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
 
 export default function TranslatorPage() {
   const navigate = useNavigate()
-  const { t } = useI18n()
   const streamRef = useRef(null)
   const debugCanvasRef = useRef(null)
-  const smootherRef = useRef(createSmoother(8))
+  const datasetHydratedRef = useRef(false)
+  const datasetHydrationPromiseRef = useRef(null)
+  const smootherRef = useRef(createSmoother())
   const gestureRecognizerRef = useRef(createGestureSequenceRecognizer())
   const staticPoseHistoryRef = useRef([])
   const lastDebugUiUpdateRef = useRef(0)
@@ -636,6 +672,9 @@ export default function TranslatorPage() {
   const appendLockRef = useRef(null)
   const lastAcceptedAtRef = useRef(0)
   const lastHandSeenAtRef = useRef(Date.now())
+  const neutralSinceRef = useRef(null)
+  const awaitingLetterReleaseRef = useRef(false)
+  const gestureLockUntilRef = useRef(0)
   const wordPauseHandledRef = useRef(false)
   const phrasePauseHandledRef = useRef(false)
 
@@ -678,10 +717,6 @@ export default function TranslatorPage() {
   const [debugSnapshot, setDebugSnapshot] = useState(null)
   const requiredStabilityFrames = isCompactViewport ? 6 : LETTER_STABILITY_FRAMES
   const isVoiceToSignMode = translationMode === TRANSLATION_MODE.VOICE_TO_SIGN
-  const [isSimulating, setIsSimulating] = useState(false)
-  const isSimulatingRef = useRef(false)
-  const [isStaticSimulating, setIsStaticSimulating] = useState(false)
-  const isStaticSimulatingRef = useRef(false)
 
   const setWordBuffer = useCallback((nextValue) => {
     const next =
@@ -779,17 +814,34 @@ export default function TranslatorPage() {
             palmOrientation: debugFrame.handMetrics.features.palm_orientation,
           }
         : null,
+      classifierState: {
+        method: debugFrame.handMetrics?.classification?.method ?? '—',
+        staticTop: debugFrame.handMetrics?.classifiers?.static?.topCandidates ?? [],
+        knnTop: debugFrame.handMetrics?.classifiers?.knn?.topCandidates ?? [],
+        fusion: debugFrame.handMetrics?.classification?.fusion ?? null,
+      },
       directionState: {
         camera: debugFrame.handMetrics?.directions?.camera ?? null,
         local: debugFrame.handMetrics?.directions?.local ?? null,
+        cameraVectors: debugFrame.handMetrics?.directions?.cameraVectors ?? null,
+        localVectors: debugFrame.handMetrics?.directions?.localVectors ?? null,
         palmNormal: debugFrame.handMetrics?.orientation?.palmNormal ?? null,
         palmOrientation: debugFrame.handMetrics?.orientation?.palmOrientation ?? null,
         screenAxes: debugFrame.handMetrics?.orientation?.axes?.screen ?? null,
       },
+      trackingState: {
+        hasWorldLandmarks: Array.isArray(debugFrame.frameMeta?.handWorldLandmarks) && debugFrame.frameMeta.handWorldLandmarks.length === 21,
+      },
       palmCenter: debugFrame.handMetrics?.posture?.palmCenter ?? null,
+      handCount: debugFrame.handMetrics?.posture?.handCount ?? 1,
       handQuality: debugFrame.handQuality ?? null,
       staticPose: debugFrame.staticPose ?? null,
       handedness: debugFrame.handedness ?? 'unknown',
+      controlState: {
+        margin: debugFrame.rawPrediction?.margin ?? null,
+        awaitingRelease: awaitingLetterReleaseRef.current,
+        gestureLocked: Date.now() < gestureLockUntilRef.current,
+      },
     })
   }, [showDebug])
 
@@ -800,6 +852,9 @@ export default function TranslatorPage() {
     candidateLetterRef.current = null
     candidateFramesRef.current = 0
     appendLockRef.current = null
+    neutralSinceRef.current = null
+    awaitingLetterReleaseRef.current = false
+    gestureLockUntilRef.current = 0
     updateDetectionDisplay(null, 0, 'letter')
     setHandPresence(false)
     setDebugSnapshot(null)
@@ -832,7 +887,7 @@ export default function TranslatorPage() {
 
   const handleSpeechError = useCallback((errorCode) => {
     if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
-      setSpeechError('Permiso de microfono denegado. Debes habilitarlo para usar voz a señas.')
+      setSpeechError('Permiso de microfono denegado. Debes habilitarlo para usar voz a senas.')
       setIsActive(false)
       return
     }
@@ -1023,15 +1078,16 @@ export default function TranslatorPage() {
     if (!gesture?.word) return null
 
     setWordBuffer('')
-    setLastGestureWord(gesture.word)
+    const spokenWord = gesture.spoken || gesture.word
+    setLastGestureWord(spokenWord)
     candidateLetterRef.current = null
     candidateFramesRef.current = 0
     appendLockRef.current = null
 
-    return pushRecognizedWord(gesture.word, {
+    return pushRecognizedWord(spokenWord, {
       raw: gesture.word,
       normalized: gesture.word,
-      corrected: gesture.word,
+      corrected: spokenWord,
       changed: false,
       confidence: gesture.confidence,
       reason: 'dynamic_gesture',
@@ -1067,69 +1123,20 @@ export default function TranslatorPage() {
     setWordBuffer((prev) => prev + letter)
   }, [setWordBuffer])
 
-  
-  const runSimulation = useCallback(async () => {
-    if (!isActive) return
-    setIsSimulating(true)
-    isSimulatingRef.current = true
-    
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+  const commitDynamicLetter = useCallback((gesture) => {
+    if (!gesture?.letter) return null
 
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(1000)
+    const letter = String(gesture.letter).trim().toUpperCase()
+    if (!letter) return null
 
-    // 1. A
-    updateDetectionDisplay('A', 0.85, 'letter')
-    await delay(1200)
-    appendLetter('A')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
+    setLastGestureWord('')
+    candidateLetterRef.current = null
+    candidateFramesRef.current = 0
+    appendLockRef.current = null
+    appendLetter(letter)
 
-    // 2. B
-    updateDetectionDisplay('B', 0.90, 'letter')
-    await delay(1200)
-    appendLetter('B')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
-
-    // 3. C
-    updateDetectionDisplay('C', 0.88, 'letter')
-    await delay(1500)
-    appendLetter('C')
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(500)
-    
-    commitWord() // append ABC
-    await delay(1000)
-
-    // 4. Hola
-    updateDetectionDisplay('HOLA', 0.95, 'gesture')
-    await delay(1000)
-    commitGesture({ word: 'hola', confidence: 0.95 })
-    updateDetectionDisplay(null, 0, 'letter')
-    
-    // DELAY EXTRA POR MUNDO
-    await delay(4000)
-
-    // 5. Mundo
-    updateDetectionDisplay('MUNDO', 0.92, 'gesture')
-    await delay(1000)
-    commitGesture({ word: 'mundo', confidence: 0.92 })
-    updateDetectionDisplay(null, 0, 'letter')
-    await delay(1000)
-
-    setIsSimulating(false)
-    isSimulatingRef.current = false
-  }, [isActive, appendLetter, commitWord, commitGesture, updateDetectionDisplay])
-
-  const toggleStaticSimulation = useCallback(() => {
-    const next = !isStaticSimulating
-    setIsStaticSimulating(next)
-    isStaticSimulatingRef.current = next
-    if (next) {
-      updateDetectionDisplay(null, 0, 'letter')
-    }
-  }, [isStaticSimulating, updateDetectionDisplay])
+    return letter
+  }, [appendLetter])
 
   const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
     const now = Date.now()
@@ -1145,54 +1152,45 @@ export default function TranslatorPage() {
     }
     const gestureState = gestureRecognizerRef.current.push(landmarks, enrichedFrameMeta, now)
 
-    if (isSimulatingRef.current || isStaticSimulatingRef.current) {
-      updateDebugVisuals({
-        landmarks,
-        frameMeta: enrichedFrameMeta,
-        handMetrics,
-        handQuality,
-        staticPose,
-        handedness,
-        fingerDebugString: debugFingers(landmarks, { handedness }),
-        gestureState,
-        rawPrediction: null,
-        smoothedPrediction: null,
-        prediction: null,
-      })
-      lastHandSeenAtRef.current = now
-      wordPauseHandledRef.current = false
-      phrasePauseHandledRef.current = false
-      setHandPresence(true)
-      return
-    }
+    const bestCandidate = handMetrics?.classification?.bestCandidate ?? null
+    const topCandidates = handMetrics?.classification?.topCandidates ?? []
+    const secondCandidate = topCandidates[1] ?? null
+    const candidateMargin =
+      bestCandidate && secondCandidate
+        ? bestCandidate.confidence - secondCandidate.confidence
+        : bestCandidate
+          ? bestCandidate.confidence
+          : 0
+
+    const staticInputAllowed =
+      handQuality.reliable &&
+      staticPose.stable &&
+      !gestureState.suppressStatic &&
+      now >= gestureLockUntilRef.current
 
     let rawPrediction = null
-    if (handQuality.reliable && staticPose.stable && !gestureState.suppressStatic) {
-      const bestCandidate = handMetrics?.classification?.bestCandidate ?? null
-      const basePrediction = bestCandidate
-        ? {
-            letter: bestCandidate.letter,
-            confidence: bestCandidate.confidence,
-            candidates: handMetrics.classification.topCandidates,
-            classifierDebug: handMetrics.classification,
-            secondCandidateFailure: handMetrics.classification.topCandidates[1]?.failedRule ?? null,
-          }
-        : null
-      if (basePrediction) {
-        const adjustedConfidence = basePrediction.confidence
-        if (adjustedConfidence >= MIN_STATIC_CONFIDENCE) {
-          rawPrediction = {
-            ...basePrediction,
-            confidence: adjustedConfidence,
-          }
-        }
+    if (staticInputAllowed && bestCandidate) {
+      const basePrediction = {
+        letter: bestCandidate.letter,
+        confidence: bestCandidate.confidence,
+        candidates: topCandidates,
+        classifierDebug: handMetrics.classification,
+        secondCandidateFailure: topCandidates[1]?.failedRule ?? null,
+        margin: candidateMargin,
+      }
+
+      if (
+        basePrediction.confidence >= MIN_STATIC_CONFIDENCE &&
+        candidateMargin >= MIN_STATIC_MARGIN
+      ) {
+        rawPrediction = basePrediction
       }
     }
 
     const smoothedPrediction = rawPrediction
       ? smootherRef.current.push(rawPrediction)
       : (smootherRef.current.reset(), null)
-    const prediction = smoothedPrediction || rawPrediction
+    const prediction = smoothedPrediction
 
     updateDebugVisuals({
       landmarks,
@@ -1209,17 +1207,45 @@ export default function TranslatorPage() {
     })
 
     lastHandSeenAtRef.current = now
-    wordPauseHandledRef.current = false
-    phrasePauseHandledRef.current = false
     setHandPresence(true)
 
     if (gestureState.gesture) {
-      updateDetectionDisplay(gestureState.gesture.word.toUpperCase(), gestureState.gesture.confidence, 'gesture')
-      commitGesture(gestureState.gesture)
+      gestureLockUntilRef.current = now + GESTURE_LOCK_MS
+      neutralSinceRef.current = null
+      awaitingLetterReleaseRef.current = true
+      wordPauseHandledRef.current = false
+      phrasePauseHandledRef.current = false
+
+      if (gestureState.gesture.letter) {
+        updateDetectionDisplay(gestureState.gesture.letter.toUpperCase(), gestureState.gesture.confidence, 'letter')
+        commitDynamicLetter(gestureState.gesture)
+      } else {
+        updateDetectionDisplay((gestureState.gesture.spoken || gestureState.gesture.word).toUpperCase(), gestureState.gesture.confidence, 'gesture')
+        commitGesture(gestureState.gesture)
+      }
+
       return
     }
 
-    if (gestureState.suppressStatic || !handQuality.reliable || !staticPose.stable) {
+    const neutralFrame =
+      gestureState.suppressStatic ||
+      !handQuality.reliable ||
+      !staticPose.stable ||
+      !rawPrediction
+
+    if (neutralFrame) {
+      if (!neutralSinceRef.current) {
+        neutralSinceRef.current = now
+      }
+
+      if (
+        awaitingLetterReleaseRef.current &&
+        now - neutralSinceRef.current >= LETTER_RELEASE_MS
+      ) {
+        awaitingLetterReleaseRef.current = false
+        appendLockRef.current = null
+      }
+
       smootherRef.current.reset()
       candidateLetterRef.current = null
       candidateFramesRef.current = 0
@@ -1227,10 +1253,12 @@ export default function TranslatorPage() {
       return
     }
 
+    neutralSinceRef.current = null
+    wordPauseHandledRef.current = false
+    phrasePauseHandledRef.current = false
+
     if (!prediction) {
-      candidateLetterRef.current = null
-      candidateFramesRef.current = 0
-      updateDetectionDisplay(null, 0, 'letter')
+      updateDetectionDisplay(rawPrediction?.letter ?? null, rawPrediction?.confidence ?? 0, 'letter')
       return
     }
 
@@ -1253,10 +1281,14 @@ export default function TranslatorPage() {
 
     updateDetectionDisplay(prediction.letter, confidence, 'letter')
 
-    if (stabilityFrames >= requiredStabilityFrames) {
+    if (
+      stabilityFrames >= requiredStabilityFrames &&
+      !awaitingLetterReleaseRef.current
+    ) {
       appendLetter(prediction.letter)
+      awaitingLetterReleaseRef.current = true
     }
-  }, [appendLetter, commitGesture, requiredStabilityFrames, setHandPresence, updateDebugVisuals, updateDetectionDisplay])
+  }, [appendLetter, commitDynamicLetter, commitGesture, requiredStabilityFrames, setHandPresence, updateDebugVisuals, updateDetectionDisplay])
 
   const { videoRef, ready, error: detectionError } = useHandDetection({
     onLandmarks: handleLandmarks,
@@ -1300,10 +1332,30 @@ export default function TranslatorPage() {
   }, [])
 
   useEffect(() => {
-    hydrateTemplatesFromServer().catch((error) => {
-      console.warn('[Translator] No se pudo hidratar dataset desde MongoDB; se usará cache local.', error)
-    })
-  }, [])
+    if (
+      !isActive ||
+      isVoiceToSignMode ||
+      datasetHydratedRef.current ||
+      datasetHydrationPromiseRef.current
+    ) {
+      return
+    }
+
+    const hydrationPromise = hydrateTemplatesFromServer()
+      .then(() => {
+        datasetHydratedRef.current = true
+      })
+      .catch((error) => {
+        console.warn('[Translator] No se pudo hidratar dataset desde MongoDB; se usará cache local.', error)
+      })
+      .finally(() => {
+        if (datasetHydrationPromiseRef.current === hydrationPromise) {
+          datasetHydrationPromiseRef.current = null
+        }
+      })
+
+    datasetHydrationPromiseRef.current = hydrationPromise
+  }, [isActive, isVoiceToSignMode])
 
   useEffect(() => {
     if (!isActive) {
@@ -1382,7 +1434,7 @@ export default function TranslatorPage() {
     setTtsError('')
 
     if (!speechSupported) {
-      setSpeechError('Este navegador no soporta reconocimiento de voz continuo para voz a señas.')
+      setSpeechError('Este navegador no soporta reconocimiento de voz continuo para voz a senas.')
       setIsActive(false)
       return
     }
@@ -1404,28 +1456,46 @@ export default function TranslatorPage() {
     if (!isActive || isVoiceToSignMode) return
 
     const intervalId = window.setInterval(() => {
-      const idleFor = Date.now() - lastHandSeenAtRef.current
+      const now = Date.now()
+      const idleFor = now - lastHandSeenAtRef.current
 
-      // Como el hook solo nos avisa cuando SI hay mano, las pausas se infieren
-      // midiendo cuanto tiempo llevamos sin recibir landmarks.
-      if (isSimulatingRef.current || isStaticSimulatingRef.current) return;
+      // Cuando dejamos de recibir landmarks no debemos resetear todo de inmediato:
+      // primero entramos a estado neutral para permitir release + commit de palabra.
       if (idleFor >= HAND_LOST_GRACE_MS) {
-        resetPredictionState()
+        if (!neutralSinceRef.current) {
+          neutralSinceRef.current = lastHandSeenAtRef.current + HAND_LOST_GRACE_MS
+        }
+
+        setHandPresence(false)
+        smootherRef.current.reset()
+        candidateLetterRef.current = null
+        candidateFramesRef.current = 0
+        updateDetectionDisplay(null, 0, 'letter')
       }
 
-      if (idleFor >= WORD_PAUSE_MS && !wordPauseHandledRef.current) {
+      const neutralFor = neutralSinceRef.current ? now - neutralSinceRef.current : 0
+
+      if (
+        neutralFor >= LETTER_RELEASE_MS &&
+        awaitingLetterReleaseRef.current
+      ) {
+        awaitingLetterReleaseRef.current = false
+        appendLockRef.current = null
+      }
+
+      if (neutralFor >= WORD_PAUSE_MS && !wordPauseHandledRef.current) {
         wordPauseHandledRef.current = true
         commitWord()
       }
 
-      if (idleFor >= PHRASE_PAUSE_MS && !phrasePauseHandledRef.current) {
+      if (neutralFor >= PHRASE_PAUSE_MS && !phrasePauseHandledRef.current) {
         phrasePauseHandledRef.current = true
         commitPhrase()
       }
     }, 100)
 
     return () => window.clearInterval(intervalId)
-  }, [commitPhrase, commitWord, isActive, isVoiceToSignMode, resetPredictionState])
+  }, [commitPhrase, commitWord, isActive, isVoiceToSignMode, setHandPresence, updateDetectionDisplay])
 
   const toggleTranslation = useCallback(async () => {
     if (!isActive && !isVoiceToSignMode) {
@@ -1446,6 +1516,7 @@ export default function TranslatorPage() {
     setCameraError('')
     setTtsError('')
     setSpeechError('')
+
     setTranslationMode((prev) => (
       prev === TRANSLATION_MODE.SIGN_TO_VOICE
         ? TRANSLATION_MODE.VOICE_TO_SIGN
@@ -1463,193 +1534,199 @@ export default function TranslatorPage() {
   const recentVoiceLines = voiceLines.slice(-3)
   const liveDecodedWord = wordBuffer ? decodeFingerSpelling(wordBuffer) : null
   const liveWordPreview = liveDecodedWord?.corrected || (wordBuffer ? normalizeWord(wordBuffer) : '')
-  const liveSubtitle = isStaticSimulating ? 'Hola, quisiera agendar una cita' : [...phraseWords, liveWordPreview].filter(Boolean).join(' ')
+  const liveSubtitle = [...phraseWords, liveWordPreview]
+    .filter(Boolean)
+    .join(' ')
   const voiceLiveSource = voiceInterim || latestVoiceTranscript || recentVoiceLines[recentVoiceLines.length - 1] || ''
   const voiceHistoryLines = [...recentVoiceLines].reverse()
   const detectionHeading = isVoiceToSignMode
     ? 'Entrada de voz'
     : currentDetectionType === 'gesture'
-      ? t('translator.gesture_detected')
-      : t('translator.letter_detected')
+      ? 'Gesto detectado'
+      : 'Letra detectada'
   const gestureDebug = debugSnapshot?.gestureDebug
   const currentGestureFrame = gestureDebug?.currentFrame
   const mobileBottomOffset = '1rem'
   const modeToggleLabel = isVoiceToSignMode ? 'Señas a voz' : 'Voz a señas'
   const startActionLabel = isVoiceToSignMode
     ? (isActive ? 'Pausar voz a señas' : 'Iniciar voz a señas')
-    : (isActive ? t('translator.pause_translation') : t('translator.start_translation'))
-  const displayBadgeLabel = isVoiceToSignMode ? 'Deletreo visual activo' : t('translator.spelling_gestures')
+    : (isActive ? 'Pausar traduccion' : 'Iniciar traduccion')
+  const heroTitle = isVoiceToSignMode ? 'Voz a señas' : 'Listo para traducir'
+  const heroDescription = isVoiceToSignMode
+    ? 'Toca iniciar, permite el microfono y mostraremos el mensaje dicho en pantalla, deletreado y con alta legibilidad.'
+    : 'Toca iniciar, apunta la camara trasera a la persona que esta senando y deja que SignBridge interprete en voz alta.'
+  const displayBadgeLabel = isVoiceToSignMode ? 'Deletreo visual activo' : 'Deletreo + gestos activos'
   const displayIndicator = isVoiceToSignMode ? (speechListening ? '🎙' : '—') : (currentLetter || '—')
   const displayConfidence = isVoiceToSignMode ? (speechListening ? 1 : 0) : currentConfidence
+  const mainPanelTitle = isVoiceToSignMode ? 'Mensaje actual' : 'Palabra actual'
+  const isMobileSignToVoice = isCompactViewport && !isVoiceToSignMode
 
   const statusLabel = isVoiceToSignMode
     ? !speechSupported
-      ? 'Sin Speech API'
+      ? 'Sin speech API'
       : !isActive
         ? 'En pausa'
         : speechListening
           ? 'Escuchando'
           : 'Activando micro'
     : detectionError
-      ? t('translator.status_error')
+      ? 'Error IA'
       : !ready
-        ? t('translator.status_loading')
+        ? 'Cargando IA'
         : !isActive
-          ? t('translator.status_paused')
+          ? 'En pausa'
           : cameraReady && handPresent
-            ? t('translator.status_detecting')
+            ? 'Detectando'
             : cameraReady
-              ? t('translator.status_waiting')
-              : t('translator.status_camera')
+            ? 'Esperando mano'
+              : 'Abriendo camara'
 
   if (isVoiceToSignMode) {
     return (
-      <section className="relative min-h-[100dvh] overflow-x-hidden bg-slate-950">
-        {/* Soft immersive ambient lighting */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(57,194,215,0.05),_transparent_60%),radial-gradient(circle_at_bottom_left,_rgba(17,54,88,0.25),_transparent_50%)]" />
-          <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-brand-500/10 blur-[100px]" />
-          <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-accent-500/10 blur-[100px]" />
+      <section className="relative min-h-[100dvh] overflow-x-hidden bg-black">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_34%),radial-gradient(circle_at_80%_20%,_rgba(16,185,129,0.16),_transparent_28%),linear-gradient(180deg,_rgba(9,9,11,0.96)_0%,_rgba(9,9,11,1)_100%)]" />
+          <div className="absolute -left-16 top-24 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="absolute bottom-24 right-0 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] sm:px-6">
+        <div
+          className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col px-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] sm:px-6"
+        >
           <div className="flex justify-end">
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="rounded-full border border-slate-800 bg-slate-900/60 px-5 py-2 text-sm font-semibold text-slate-300 shadow-xl backdrop-blur-xl transition hover:bg-slate-800 hover:text-white active:scale-95 touch-manipulation"
+              className="rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white shadow-xl backdrop-blur-md transition active:scale-95 touch-manipulation"
             >
               Salir
             </button>
           </div>
 
-          <div className="mt-5 rounded-[2rem] border border-slate-800/80 bg-slate-900/40 p-5 shadow-2xl backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-7">
+          <div className="mt-3 rounded-[1.4rem] border border-white/10 bg-black/45 p-4 backdrop-blur-xl sm:rounded-[2rem] sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-300">{detectionHeading}</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">{detectionHeading}</p>
                 <div className="mt-2 flex items-end gap-3">
-                  <span className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+                  <span className="text-4xl font-black leading-none text-white sm:text-6xl">
                     {displayIndicator}
                   </span>
-                  <span className="pb-1.5 text-sm font-semibold text-slate-400 sm:pb-2.5">
+                  <span className="pb-1 text-sm text-zinc-200 sm:pb-2">
                     {Math.round(displayConfidence * 100)}%
                   </span>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300 shadow-inner">
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-zinc-100">
                   {statusLabel}
                 </span>
-                <span className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1.5 text-xs font-semibold text-brand-200">
+                <span className="rounded-full bg-sky-500/12 px-3 py-1 text-xs text-sky-200">
                   Perfil: {SIGN_LANGUAGE_PROFILE.code}
                 </span>
-                <span className="rounded-full border border-accent-500/20 bg-accent-500/10 px-3 py-1.5 text-xs font-semibold text-accent-200">
+                <span className="rounded-full bg-emerald-500/12 px-3 py-1 text-xs text-emerald-200">
                   {displayBadgeLabel}
                 </span>
-                <span className="rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-400">
+                <span className="rounded-full bg-cyan-500/12 px-3 py-1 text-xs text-cyan-100">
                   Speech API local
                 </span>
               </div>
             </div>
 
-            <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-slate-800/50">
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full transition-all duration-300 ease-out"
+                className="h-full rounded-full transition-all duration-150"
                 style={{
-                  width: `${Math.max(displayConfidence * 100, displayIndicator !== '—' ? 10 : 0)}%`,
-                  background: 'linear-gradient(90deg, #42c0c7 0%, #39c2d7 100%)',
-                  boxShadow: '0 0 10px rgba(57,194,215,0.5)'
+                  width: `${Math.max(displayConfidence * 100, displayIndicator !== '—' ? 8 : 0)}%`,
+                  background: 'linear-gradient(90deg, #34d399 0%, #10b981 100%)',
                 }}
               />
             </div>
           </div>
 
-          <div className="mt-5 grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-            <div className="relative overflow-hidden rounded-[2rem] border border-slate-800/80 bg-slate-900/40 p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-accent-300">Modo Visual</p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+          <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+            <div className="rounded-[1.75rem] border border-white/10 bg-black/25 p-5 backdrop-blur-xl sm:p-7">
+              <p className="font-readable text-xs uppercase tracking-[0.24em] text-cyan-200">Modo visual</p>
+              <h1 className="font-readable mt-2 text-3xl font-bold tracking-[0.01em] text-white sm:text-5xl">
                 Voz a señas
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
-                El sistema capta la voz y proyecta traducciones iniciales fluidas en señas para lograr interacciones naturales sin perder contacto visual.
+              <p className="font-readable mt-3 max-w-2xl text-sm leading-relaxed text-zinc-300 sm:text-base">
+                Escuchamos la frase y la devolvemos en pantalla con deletreo grande y legible mientras llega una version de señas completa.
               </p>
 
-              <div className="mt-7 rounded-[1.75rem] border border-slate-800/60 bg-slate-950/50 p-5 shadow-inner sm:p-7">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Salida Visual Inmediata</p>
-                  <span className={`rounded-lg px-3 py-1 text-xs font-bold ${speechListening ? 'bg-accent-500/10 text-accent-300' : 'bg-slate-800 text-slate-400'}`}>
-                    {speechListening ? 'Grabando...' : isActive ? 'Esperando input...' : 'Pausado'}
+              <div className="mt-5 rounded-[1.75rem] border border-white/10 bg-white/5 p-4 sm:p-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-readable text-xs uppercase tracking-[0.24em] text-zinc-400">Salida visual inmediata</p>
+                  <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-zinc-300">
+                    {speechListening ? 'Escuchando ahora' : isActive ? 'Esperando voz' : 'Modo en pausa'}
                   </span>
                 </div>
 
-                <div className="mt-4 flex min-h-[16rem] items-center justify-center rounded-[1.25rem] border border-slate-800 bg-slate-900/30 p-5 shadow-inner sm:min-h-[20rem]">
+                <div className="mt-4 min-h-[15rem] rounded-[1.35rem] border border-white/8 bg-black/25 p-4 sm:min-h-[18rem] sm:p-5">
                   <VoiceToSignPreview
                     text={voiceLiveSource}
                     compact={isCompactViewport}
                     placeholder={isActive
-                      ? 'Aquí verás el deletreo en lengua de señas a medida que hablen...'
-                      : 'Presiona "Iniciar voz a señas" para comenzar.'}
+                      ? 'Lo que diga la persona oyente aparecera aqui, deletreado en tiempo real.'
+                      : 'Toca iniciar para empezar a mostrar el deletreo visual.'}
                   />
                 </div>
 
-                <p className="mt-4 truncate text-xs text-slate-500">
-                  <span className="font-semibold text-slate-400">Transcripción: </span> 
-                  {voiceLiveSource || '...'}
+                <p className="font-readable mt-4 text-xs text-zinc-400">
+                  Texto detectado: {voiceLiveSource || 'esperando voz'}
                 </p>
               </div>
             </div>
 
-            <aside className="flex flex-col gap-5">
-              <div className="rounded-[1.75rem] border border-slate-800/80 bg-slate-900/40 p-5 shadow-2xl backdrop-blur-2xl">
-                <div className="flex flex-col gap-4">
+            <aside className="flex flex-col gap-4">
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/50 p-4 backdrop-blur-xl">
+                <div className="flex flex-col gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Captura en vivo</p>
-                    <p className="mt-3 text-base font-medium leading-relaxed text-slate-200 sm:text-lg">
-                      {voiceLiveSource || 'Esperando a que hables...'}
+                    <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">Mensaje actual</p>
+                    <p className="font-readable mt-2 text-base font-semibold leading-relaxed text-white sm:text-lg">
+                      {voiceLiveSource || 'Esperando voz...'}
                     </p>
                     {voiceInterim && (
-                      <p className="mt-2 flex items-center gap-2 text-xs font-medium text-accent-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-accent-400 animate-pulse" />
-                        Traduciendo...
+                      <p className="mt-2 text-xs text-cyan-200">
+                        Capturando en tiempo real...
                       </p>
                     )}
                   </div>
 
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 shadow-inner">
-                    <p className="text-sm font-semibold text-slate-300">{speechListening ? 'Micrófono activo' : 'Micrófono en pausa'}</p>
-                    <p className="mt-1.5 text-xs leading-relaxed text-slate-500">Mantén pulsado el botón central para reanudar el flujo en tiempo real.</p>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-zinc-300">
+                    <p>{speechListening ? 'Microfono activo' : 'Microfono en pausa'}</p>
+                    <p className="mt-1 text-zinc-400">La salida en señas solo aparece en el panel central.</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 rounded-[1.75rem] border border-slate-800/80 bg-slate-900/40 p-5 shadow-2xl backdrop-blur-2xl">
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Historial</p>
-                <div className="mt-4 flex flex-col gap-3">
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/45 p-4 backdrop-blur-xl">
+                <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">Historial reciente</p>
+                <div className="mt-3 space-y-2">
                   {voiceHistoryLines.length > 0 ? (
                     voiceHistoryLines.map((line, index) => (
-                      <p key={`${line}-${index}`} className="rounded-xl border border-slate-800/50 bg-slate-950/30 p-3.5 text-sm font-medium leading-relaxed text-slate-400 shadow-sm">
-                        "{line}"
+                      <p key={`${line}-${index}`} className="font-readable rounded-2xl border border-white/8 bg-white/5 px-3 py-3 text-sm leading-relaxed text-zinc-300">
+                        {line}
                       </p>
                     ))
                   ) : (
-                    <p className="rounded-xl border border-slate-800/50 border-dashed bg-slate-900/20 p-5 text-center text-sm leading-relaxed text-slate-500">
-                      No hay historial en esta sesión. Todo lo que digas se guardará aquí.
+                    <p className="font-readable text-sm leading-relaxed text-zinc-500">
+                      Las frases detectadas apareceran aqui conforme hable la persona oyente.
                     </p>
                   )}
                 </div>
               </div>
 
               {(ttsError || speechError) && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {ttsError && (
-                    <p className="rounded-xl border border-tertiary-500/30 bg-tertiary-500/10 px-4 py-3 text-sm font-medium text-tertiary-200 shadow-lg">
-                      Audio Error: {ttsError}
+                    <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                      Audio: {ttsError}
                     </p>
                   )}
                   {speechError && (
-                    <p className="rounded-xl border border-accent-500/30 bg-accent-500/10 px-4 py-3 text-sm font-medium text-accent-200 shadow-lg">
-                      Speech API: {speechError}
+                    <p className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                      Voz a señas: {speechError}
                     </p>
                   )}
                 </div>
@@ -1657,17 +1734,17 @@ export default function TranslatorPage() {
             </aside>
           </div>
 
-          <div className="sticky bottom-0 mt-5 pb-[env(safe-area-inset-bottom,0px)]">
-            <div className="rounded-[2rem] border border-slate-800/80 bg-slate-900/80 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-                <div className="hidden rounded-xl border border-slate-800 bg-slate-950/50 px-5 py-3.5 text-xs font-medium text-slate-400 shadow-inner sm:block">
-                  Asegúrate de que tu micrófono tenga permisos para poder capturar y emitir las señas correctas.
+          <div className="sticky bottom-0 mt-4 pb-[env(safe-area-inset-bottom,0px)]">
+            <div className="rounded-[1.35rem] border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-300">
+                  Usa el panel central para el deletreo en señas y este lateral para leer el texto normal sin que se encimen.
                 </div>
 
                 <button
                   type="button"
                   onClick={toggleTranslationMode}
-                  className="w-full rounded-full border border-slate-700 bg-slate-800 px-6 py-3.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-95 touch-manipulation sm:w-auto"
+                  className="font-readable w-full rounded-full border border-emerald-400/30 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-lg transition active:scale-95 touch-manipulation lg:w-auto"
                 >
                   {modeToggleLabel}
                 </button>
@@ -1675,16 +1752,11 @@ export default function TranslatorPage() {
                 <button
                   type="button"
                   onClick={toggleTranslation}
-                  className={`relative w-full overflow-hidden rounded-full px-8 py-3.5 text-sm font-extrabold text-white shadow-xl transition-transform hover:scale-[1.02] active:scale-95 touch-manipulation sm:w-auto ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-red-500 to-rose-600 shadow-red-500/20' 
-                      : 'bg-gradient-to-r from-brand-600 to-accent-500 shadow-brand-500/25'
+                  className={`w-full rounded-full px-4 py-3 text-sm font-semibold shadow-lg transition active:scale-95 touch-manipulation lg:w-auto ${
+                    isActive ? 'bg-red-500 text-white' : 'bg-brand-500 text-white'
                   }`}
                 >
-                  <span className="relative z-10">{startActionLabel}</span>
-                  {!isActive && (
-                    <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity hover:opacity-100" />
-                  )}
+                  {startActionLabel}
                 </button>
               </div>
             </div>
@@ -1694,216 +1766,455 @@ export default function TranslatorPage() {
     )
   }
 
-  return (
-    <section className="relative h-full min-h-[100dvh] overflow-hidden bg-slate-950">
-      {/* Camera feed */}
-      <video
-        ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-500 ${
-          cameraReady ? 'opacity-100' : 'opacity-0'
-        }`}
-        style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
-        muted
-        playsInline
-        autoPlay
-        disablePictureInPicture
-      />
+  if (isMobileSignToVoice) {
+    return (
+      <section className="relative min-h-[100dvh] overflow-hidden bg-black">
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
+            cameraReady ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
+          muted
+          playsInline
+          autoPlay
+          disablePictureInPicture
+        />
 
-      {/* Debug canvas */}
-      <canvas
-        ref={debugCanvasRef}
-        className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200 ${
-          showDebug ? 'opacity-100' : 'opacity-0'
-        }`}
-        style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
-      />
+        <canvas
+          ref={debugCanvasRef}
+          className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200 ${
+            showDebug ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
+        />
 
-      {/* Gradient vignette with brand tint */}
-      <div className="absolute inset-0 bg-gradient-to-b from-brand-950/80 via-transparent to-slate-950/90" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/20 to-black/90" />
 
-      {/* Loading state */}
-      {isActive && !cameraReady && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-gradient-to-br from-slate-950 via-brand-950/40 to-slate-950">
-          <div className="max-w-sm px-6 text-center">
-            <div className="mx-auto mb-6 h-16 w-16 rounded-2xl border-2 border-brand-400 border-t-transparent animate-spin" />
-            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">{t('translator.loading_title')}</h1>
-            <p className="text-sm leading-relaxed text-brand-200/70">
-              {t('translator.loading_desc')}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Idle state — hero card */}
-      {!isActive && (
-        <div className="absolute inset-x-0 top-1/2 z-[5] px-4 -translate-y-1/2 sm:px-6">
-          <div className="mx-auto max-w-sm overflow-hidden rounded-2xl border border-brand-500/30 bg-gradient-to-b from-brand-950/60 to-slate-900/70 px-5 py-6 text-center shadow-2xl shadow-brand-500/10 backdrop-blur-2xl sm:max-w-md sm:rounded-3xl sm:p-8">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/20 text-2xl ring-1 ring-brand-400/30 sm:mb-5 sm:h-16 sm:w-16 sm:text-3xl">
-              🤟
+        {isActive && !cameraReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
+            <div className="max-w-sm px-6 text-center">
+              <div className="mx-auto mb-4 h-14 w-14 rounded-full border-2 border-brand-500/60 border-t-transparent animate-spin" />
+              <h1 className="mb-2 text-2xl font-semibold tracking-tight">SignBridge Live</h1>
+              <p className="text-sm text-zinc-300">
+                Abriendo camara trasera y preparando la deteccion en tiempo real.
+              </p>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('translator.idle_title')}</h1>
-            <p className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-slate-300 sm:mt-3 sm:text-sm">
-              {t('translator.idle_desc')}
+          </div>
+        )}
+
+        <div
+          className="absolute inset-x-0 top-0 z-10 px-3"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.55rem)' }}
+        >
+          <div className="mx-auto max-w-xl rounded-[1.4rem] border border-white/10 bg-black/45 p-3 backdrop-blur-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-300">{detectionHeading}</p>
+                <div className="mt-2 flex items-end gap-3">
+                  <span className="text-4xl font-black leading-none text-white">
+                    {displayIndicator}
+                  </span>
+                  <span className="pb-1 text-sm text-zinc-200">
+                    {Math.round(displayConfidence * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-medium text-zinc-100">
+                  {statusLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="rounded-full border border-white/15 bg-black/60 px-3 py-2 text-sm font-medium text-white shadow-xl backdrop-blur-md transition active:scale-95 touch-manipulation"
+                >
+                  Salir
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
+              <span className="rounded-full bg-white/8 px-3 py-1">
+                Estable: {requiredStabilityFrames}f
+              </span>
+              <span className="rounded-full bg-white/8 px-3 py-1">
+                Pausa: {WORD_PAUSE_MS}ms
+              </span>
+              {cameraReady && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-200">
+                  {shouldMirrorPreview ? 'Vista espejo' : 'Vista normal'}
+                </span>
+              )}
+              {(audioStatus !== 'idle' || queueSize > 0) && (
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-emerald-200">
+                  {audioStatus === 'fetching'
+                    ? 'Audio...'
+                    : audioStatus === 'playing'
+                      ? 'Hablando'
+                      : 'En cola'}
+                  {queueSize > 0 ? ` · ${queueSize}` : ''}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full transition-all duration-150"
+                style={{
+                  width: `${Math.max(displayConfidence * 100, displayIndicator !== '—' ? 8 : 0)}%`,
+                  background:
+                    displayConfidence > 0.85
+                      ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
+                      : displayConfidence > 0.6
+                        ? 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'
+                        : 'linear-gradient(90deg, #fb7185 0%, #ef4444 100%)',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {showDebug && debugSnapshot && (
+          <div
+            className="absolute inset-x-3 z-10 max-h-[20dvh] overflow-y-auto rounded-[1.25rem] border border-cyan-400/20 bg-black/65 p-3 backdrop-blur-xl"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8.3rem)' }}
+          >
+            <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200">Debug Movil</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-zinc-200">
+              <span className="rounded-xl bg-white/8 px-3 py-2">Tipo: {debugSnapshot.currentDetectionType}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Calidad: {debugSnapshot.handQuality?.qualityScore?.toFixed(2) ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Caja: {formatQualityStatus(debugSnapshot.handQuality?.status)}</span>
+            </div>
+            <div className="mt-2 space-y-1 rounded-2xl bg-white/8 p-3 font-mono text-[11px] text-zinc-200">
+              <p>mano:{debugSnapshot.handedness}</p>
+              <p>stable:{debugSnapshot.staticPose?.stable ? '1' : '0'} usable:{debugSnapshot.handQuality?.reliable ? '1' : '0'}</p>
+              <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
+              <p>motivo:{debugSnapshot.handQuality?.reasons?.length ? debugSnapshot.handQuality.reasons.map(formatQualityReason).join(', ') : 'ok'}</p>
+              <p>estado:{debugSnapshot.fingerDebugString ?? '—'}</p>
+              <p>hands:{debugSnapshot.handCount ?? 1} dtw2:{gestureDebug?.twoHandsRatio?.toFixed(2) ?? '—'}</p>
+              <p>cam:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
+              <p>loc:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+              <p>camVec:{formatFingerVectors(debugSnapshot.directionState?.cameraVectors)}</p>
+              <p>motor:{debugSnapshot.classifierState?.method ?? '—'}</p>
+              <p>vec:{formatTopCandidates(debugSnapshot.classifierState?.staticTop)}</p>
+              <p>db:{formatTopCandidates(debugSnapshot.classifierState?.knnTop)}</p>
+              <p>top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}</p>
+              <p>palm:{debugSnapshot.directionState?.palmOrientation ?? '—'} 3d:{debugSnapshot.trackingState?.hasWorldLandmarks ? '1' : '0'}</p>
+              <p>gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(2) ?? '—'} crossed:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}</p>
+              <p>fusion:{debugSnapshot.classifierState?.fusion?.knnScope ?? '—'} rej:{debugSnapshot.classifierState?.fusion?.knnRejectedReason ?? '—'}</p>
+            </div>
+          </div>
+        )}
+
+        <div
+          className="absolute inset-x-0 bottom-0 z-10 px-3"
+          style={{ paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${isStandaloneMode ? '0.75rem' : '4.75rem'})` }}
+        >
+          <div className="mx-auto max-w-xl max-h-[47dvh] overflow-y-auto rounded-[1.6rem] border border-white/10 bg-black/55 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">{mainPanelTitle}</p>
+                  <p className="mt-2 text-base font-semibold tracking-[0.16em] text-white">
+                    {formatSpelledWord(wordBuffer)}
+                  </p>
+                  {liveDecodedWord?.changed && (
+                    <p className="mt-2 text-xs text-emerald-200">
+                      Interpretando "{liveDecodedWord.normalized}" como "{liveDecodedWord.corrected}"
+                    </p>
+                  )}
+                  {lastGestureWord && currentDetectionType === 'gesture' && (
+                    <p className="mt-2 text-xs text-sky-200">
+                      Gesto reconocido: "{lastGestureWord}"
+                    </p>
+                  )}
+                </div>
+
+                <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-zinc-300">
+                  <p>{handPresent ? 'Mano visible' : 'Sin mano'}</p>
+                  <p className="mt-1 text-zinc-400">Cierre automatico de palabra</p>
+                </div>
+              </div>
+
+              {recentLines.length > 0 && (
+                <div className="space-y-2">
+                  {recentLines.slice(-2).reverse().map((line, index) => (
+                    <p key={`${line}-${index}`} className="text-xs text-zinc-400">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-[1.25rem] border border-white/8 bg-white/5 p-4">
+                <p className="text-xl font-semibold leading-tight text-white">
+                  {liveSubtitle || 'Los subtitulos apareceran aqui en cuanto detectemos la mano.'}
+                </p>
+
+                {lastDecodedWord?.changed && (
+                  <p className="mt-3 text-xs text-emerald-200">
+                    Ultima correccion: "{lastDecodedWord.normalized}" {'->'} "{lastDecodedWord.corrected}"
+                  </p>
+                )}
+              </div>
+
+              {(cameraError || detectionError || ttsError) && (
+                <div className="space-y-2 text-sm">
+                  {cameraError && (
+                    <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
+                      {cameraError}
+                    </p>
+                  )}
+                  {detectionError && (
+                    <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
+                      Error del modelo: {detectionError}
+                    </p>
+                  )}
+                  {ttsError && (
+                    <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-100">
+                      Audio: {ttsError}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3 border-t border-white/10 pt-3">
+                <button
+                  type="button"
+                  onClick={toggleTranslationMode}
+                  className="font-readable w-full rounded-full border border-emerald-400/30 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-lg transition active:scale-95 touch-manipulation"
+                >
+                  {modeToggleLabel}
+                </button>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDebug((prev) => !prev)}
+                    className="rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-lg transition active:scale-95 touch-manipulation"
+                  >
+                    {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={toggleTranslation}
+                    className={`rounded-full px-4 py-3 text-sm font-semibold shadow-lg transition active:scale-95 touch-manipulation ${
+                      isActive ? 'bg-red-500 text-white' : 'bg-brand-500 text-white'
+                    }`}
+                  >
+                    {startActionLabel}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="relative h-full min-h-[100dvh] overflow-hidden bg-black">
+      {!isVoiceToSignMode && (
+        <>
+          <video
+            ref={videoRef}
+            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
+              cameraReady ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
+            muted
+            playsInline
+            autoPlay
+            disablePictureInPicture
+          />
+
+          <canvas
+            ref={debugCanvasRef}
+            className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200 ${
+              showDebug ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
+          />
+        </>
+      )}
+
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/10 to-black/85" />
+
+      {!isVoiceToSignMode && isActive && !cameraReady && (
+        <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
+          <div className="max-w-sm px-6 text-center">
+            <div className="mx-auto mb-4 h-14 w-14 rounded-full border-2 border-brand-500/60 border-t-transparent animate-spin" />
+            <h1 className="mb-2 text-2xl font-semibold tracking-tight">SignBridge Live</h1>
+            <p className="text-sm text-zinc-300">
+              Abriendo camara trasera y preparando la deteccion en tiempo real.
             </p>
-            <button
-              type="button"
-              onClick={toggleTranslation}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-600 to-accent-500 px-6 py-2.5 text-sm font-extrabold text-white shadow-xl shadow-brand-500/25 transition-transform hover:scale-[1.02] active:scale-95 touch-manipulation sm:mt-6 sm:px-8 sm:py-3"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
-              {t('translator.start_translation')}
-            </button>
           </div>
         </div>
       )}
 
-      {/* ─── Top detection HUD ─── */}
+      {!isActive && (
+        <div className="absolute inset-x-0 top-1/2 z-[5] px-6 -translate-y-1/2">
+          <div className="mx-auto max-w-md rounded-[2rem] border border-white/10 bg-black/45 p-6 text-center backdrop-blur-xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 text-2xl text-brand-300">
+              {isVoiceToSignMode ? '🎙️' : '🤟'}
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">{heroTitle}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {heroDescription}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div
-        className="absolute inset-x-0 top-0 z-10 px-3 sm:px-4"
+        className="absolute inset-x-0 top-0 z-10 px-4"
         style={{ paddingTop: `calc(env(safe-area-inset-top, 0px) + ${isCompactViewport ? '0.75rem' : '1rem'})` }}
       >
-        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-brand-500/25 bg-gradient-to-r from-brand-950/70 via-slate-900/60 to-brand-950/70 px-3 py-2.5 shadow-xl shadow-brand-500/5 backdrop-blur-2xl sm:rounded-3xl sm:p-4">
-          {/* Main detection row */}
-          <div className="flex items-start justify-between gap-2 sm:gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-brand-300 sm:text-[10px]">{detectionHeading}</p>
-              <div className="mt-1 flex items-end gap-2 sm:mt-1.5 sm:gap-3">
-                <span className="bg-gradient-to-b from-white to-brand-100 bg-clip-text text-4xl font-black leading-none text-transparent sm:text-7xl">
-                  {currentLetter || '—'}
+        <div className="mx-auto max-w-4xl rounded-[1.25rem] border border-white/10 bg-black/40 p-3 backdrop-blur-xl sm:rounded-[2rem] sm:p-4">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">{detectionHeading}</p>
+              <div className="mt-1 flex items-end gap-3">
+                <span className="text-5xl font-black leading-none text-white sm:text-7xl">
+                  {displayIndicator}
                 </span>
-                <span className="mb-0.5 rounded-md bg-white/10 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-200 sm:mb-2 sm:rounded-lg sm:px-2 sm:text-sm">
-                  {Math.round(currentConfidence * 100)}%
+                <span className="pb-1 text-sm text-zinc-200 sm:pb-2">
+                  {Math.round(displayConfidence * 100)}%
                 </span>
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${
-                isActive && cameraReady && handPresent
-                  ? 'bg-accent-500/20 text-accent-300 ring-1 ring-accent-400/30'
-                  : isActive
-                    ? 'bg-brand-500/20 text-brand-200 ring-1 ring-brand-400/20'
-                    : 'bg-white/10 text-slate-300 ring-1 ring-white/10'
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${
-                  isActive && cameraReady && handPresent ? 'bg-accent-400 animate-pulse' : isActive ? 'bg-brand-400' : 'bg-slate-500'
-                }`} />
+            <div className="flex flex-row flex-wrap items-start gap-2 sm:flex-col sm:items-end sm:text-right">
+              <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-zinc-100">
                 {statusLabel}
               </span>
 
-              {cameraReady && (
-                <span className="rounded-full bg-white/8 px-2.5 py-0.5 text-[10px] font-medium text-slate-400">
-                  {shouldMirrorPreview ? t('translator.mirror_view') : t('translator.normal_view')}
+              {!isVoiceToSignMode && cameraReady && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-200">
+                  {shouldMirrorPreview ? 'Vista espejo' : 'Vista normal'}
                 </span>
               )}
 
-              {(audioStatus !== 'idle' || queueSize > 0) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/15 px-2.5 py-0.5 text-[10px] font-medium text-accent-300 ring-1 ring-accent-400/20">
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>
+              {!isVoiceToSignMode && (audioStatus !== 'idle' || queueSize > 0) && (
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-200">
                   {audioStatus === 'fetching'
-                    ? t('translator.audio_fetching')
+                    ? 'Preparando audio'
                     : audioStatus === 'playing'
-                      ? t('translator.audio_playing')
-                      : t('translator.audio_queued')}
+                      ? 'Reproduciendo'
+                      : 'Audio en cola'}
                   {queueSize > 0 ? ` · ${queueSize}` : ''}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Confidence bar */}
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/8">
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full transition-all duration-200"
+              className="h-full rounded-full transition-all duration-150"
               style={{
-                width: `${Math.max(currentConfidence * 100, currentLetter ? 8 : 0)}%`,
+                width: `${Math.max(displayConfidence * 100, displayIndicator !== '—' ? 8 : 0)}%`,
                 background:
-                  currentConfidence > 0.85
-                    ? 'linear-gradient(90deg, #42c0c7 0%, #39c2d7 100%)'
-                    : currentConfidence > 0.6
-                      ? 'linear-gradient(90deg, #719fc6 0%, #4c81ae 100%)'
+                  displayConfidence > 0.85
+                    ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
+                    : displayConfidence > 0.6
+                      ? 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'
                       : 'linear-gradient(90deg, #fb7185 0%, #ef4444 100%)',
               }}
             />
           </div>
 
-          {/* Metadata pills */}
-          <div className="mt-2 flex flex-wrap items-center gap-1 text-[9px] text-slate-400 sm:mt-2.5 sm:gap-1.5 sm:text-[11px]">
-            <span className="rounded-full bg-white/5 px-2 py-0.5 sm:px-2.5">
-              {t('translator.stable_letter')}: {requiredStabilityFrames}f
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-300 sm:text-xs">
+            <span className="rounded-full bg-white/8 px-3 py-1">
+              Letra estable: {requiredStabilityFrames} frames
             </span>
-            <span className="rounded-full bg-white/5 px-2 py-0.5 sm:px-2.5">
-              {t('translator.word_pause')}: {WORD_PAUSE_MS}ms
+            <span className="rounded-full bg-white/8 px-3 py-1">
+              Pausa palabra: {WORD_PAUSE_MS} ms
             </span>
-            <span className="hidden rounded-full bg-white/5 px-2.5 py-0.5 sm:inline">
-              {t('translator.phrase_pause')}: {PHRASE_PAUSE_MS}ms
+            <span className="rounded-full bg-white/8 px-3 py-1">
+              Pausa frase: {PHRASE_PAUSE_MS} ms
             </span>
-            <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-brand-300 sm:px-2.5">
-              {SIGN_LANGUAGE_PROFILE.code}
+            <span className="rounded-full bg-sky-500/12 px-3 py-1 text-sky-200">
+              Perfil: {SIGN_LANGUAGE_PROFILE.code}
             </span>
-            <span className="rounded-full bg-accent-500/10 px-2 py-0.5 text-accent-300 sm:px-2.5">
-              {t('translator.spelling_gestures')}
+            <span className="rounded-full bg-emerald-500/12 px-3 py-1 text-emerald-200">
+              {displayBadgeLabel}
             </span>
+            {isVoiceToSignMode && (
+              <span className="rounded-full bg-cyan-500/12 px-3 py-1 text-cyan-100">
+                Speech API local
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ─── Debug panels (unchanged logic, brand-tinted borders) ─── */}
-      {showDebug && debugSnapshot && (
+      {!isVoiceToSignMode && showDebug && debugSnapshot && (
         isCompactViewport ? (
           <div
-            className="absolute inset-x-3 z-10 max-h-[24dvh] overflow-y-auto rounded-2xl border border-brand-400/20 bg-slate-900/80 p-3 backdrop-blur-2xl"
+            className="absolute inset-x-3 z-10 max-h-[24dvh] overflow-y-auto rounded-[1.25rem] border border-cyan-400/20 bg-black/65 p-3 backdrop-blur-xl"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 7rem)' }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Debug</p>
-            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-slate-300">
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Tipo: {debugSnapshot.currentDetectionType}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Calidad: {debugSnapshot.handQuality?.qualityScore?.toFixed(2) ?? '—'}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Caja: {formatQualityStatus(debugSnapshot.handQuality?.status)}</span>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200">Debug Movil</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-zinc-200">
+              <span className="rounded-xl bg-white/8 px-3 py-2">Tipo: {debugSnapshot.currentDetectionType}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Calidad: {debugSnapshot.handQuality?.qualityScore?.toFixed(2) ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Caja: {formatQualityStatus(debugSnapshot.handQuality?.status)}</span>
             </div>
-            <div className="mt-2 space-y-1 rounded-xl bg-white/5 p-2.5 font-mono text-[10px] text-slate-300">
+            <div className="mt-2 space-y-1 rounded-2xl bg-white/8 p-3 font-mono text-[11px] text-zinc-200">
               <p>mano:{debugSnapshot.handedness}</p>
               <p>stable:{debugSnapshot.staticPose?.stable ? '1' : '0'} usable:{debugSnapshot.handQuality?.reliable ? '1' : '0'}</p>
               <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
               <p>motivo:{debugSnapshot.handQuality?.reasons?.length ? debugSnapshot.handQuality.reasons.map(formatQualityReason).join(', ') : 'ok'}</p>
               <p>estado:{debugSnapshot.fingerDebugString ?? '—'}</p>
+              <p>hands:{debugSnapshot.handCount ?? 1} dtw2:{gestureDebug?.twoHandsRatio?.toFixed(2) ?? '—'}</p>
               <p>cam:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
               <p>loc:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+              <p>camVec:{formatFingerVectors(debugSnapshot.directionState?.cameraVectors)}</p>
+              <p>motor:{debugSnapshot.classifierState?.method ?? '—'}</p>
+              <p>vec:{formatTopCandidates(debugSnapshot.classifierState?.staticTop)}</p>
+              <p>db:{formatTopCandidates(debugSnapshot.classifierState?.knnTop)}</p>
               <p>palm:{debugSnapshot.directionState?.palmOrientation ?? '—'} n:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
               <p>top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}</p>
+              <p>margin:{debugSnapshot.controlState?.margin?.toFixed(2) ?? '—'} release:{debugSnapshot.controlState?.awaitingRelease ? '1' : '0'}</p>
               <p>gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(2) ?? '—'} crossed:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb:{debugSnapshot.featureState?.thumbRole ?? '—'}</p>
               <p>2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}</p>
-              <p>hola head:{currentGestureFrame?.nearHead ? '1' : '0'} 2F:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'} palm:{currentGestureFrame?.palmFacingCamera ? '1' : '0'}</p>
+              <p>gesto head:{currentGestureFrame?.nearHead ? '1' : '0'} 2F:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'} palm:{currentGestureFrame?.palmFacingCamera ? '1' : '0'}</p>
             </div>
           </div>
         ) : (
           <div
-            className="absolute left-3 right-3 z-10 max-h-[40dvh] overflow-y-auto rounded-2xl border border-brand-400/20 bg-slate-900/75 p-3 backdrop-blur-2xl md:left-4 md:right-auto md:w-[min(22rem,calc(100vw-2rem))] md:p-4"
+            className="absolute left-3 right-3 z-10 max-h-[40dvh] overflow-y-auto rounded-[1.5rem] border border-cyan-400/20 bg-black/55 p-3 backdrop-blur-xl md:left-4 md:right-auto md:w-[min(22rem,calc(100vw-2rem))] md:p-4"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 9.25rem)' }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Debug Mapper</p>
-            <div className="mt-3 grid grid-cols-2 gap-1.5 text-[11px] text-slate-300">
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Tipo: {debugSnapshot.currentDetectionType}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Raw: {debugSnapshot.rawPrediction?.letter ?? '—'}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Smooth: {debugSnapshot.smoothedPrediction?.letter ?? '—'}</span>
-              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
+            <p className="text-xs uppercase tracking-[0.24em] text-cyan-200">Debug Mapper</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-200">
+              <span className="rounded-xl bg-white/8 px-3 py-2">Tipo: {debugSnapshot.currentDetectionType}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Raw: {debugSnapshot.rawPrediction?.letter ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Smooth: {debugSnapshot.smoothedPrediction?.letter ?? '—'}</span>
+              <span className="rounded-xl bg-white/8 px-3 py-2">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-slate-300">
-              <p className="font-semibold text-brand-200">Calidad mano</p>
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Calidad mano</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>reliable:{debugSnapshot.handQuality?.reliable ? '1' : '0'} status:{debugSnapshot.handQuality?.status ?? '—'} score:{debugSnapshot.handQuality?.qualityScore?.toFixed(3) ?? '—'}</p>
                 <p>edges:{debugSnapshot.handQuality?.edgeTouches ?? '—'} area:{debugSnapshot.handQuality?.area?.toFixed(3) ?? '—'}</p>
                 <p>stablePose:{debugSnapshot.staticPose?.stable ? '1' : '0'} frames:{debugSnapshot.staticPose?.sampleCount ?? 0}</p>
                 <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
+                <p>hands:{debugSnapshot.handCount ?? 1}</p>
                 <p>caja: verde=usable amarillo=marginal rojo=mala calidad</p>
                 <p>motivo: {debugSnapshot.handQuality?.reasons?.length ? debugSnapshot.handQuality.reasons.map(formatQualityReason).join(', ') : 'ok'}</p>
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-slate-300">
-              <p className="font-semibold text-brand-200">Dedos extendidos</p>
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Dedos extendidos</p>
               <p className="mt-2 font-mono">
                 T:{debugSnapshot.fingerFlags?.thumb ? '1' : '0'} I:{debugSnapshot.fingerFlags?.index ? '1' : '0'} M:{debugSnapshot.fingerFlags?.middle ? '1' : '0'} R:{debugSnapshot.fingerFlags?.ring ? '1' : '0'} P:{debugSnapshot.fingerFlags?.pinky ? '1' : '0'}
               </p>
@@ -1917,34 +2228,55 @@ export default function TranslatorPage() {
                 top3:{formatTopCandidates(debugSnapshot.classification?.topCandidates)}
               </p>
               <p className="mt-2 font-mono">
+                motor:{debugSnapshot.classifierState?.method ?? '—'} vec:{formatTopCandidates(debugSnapshot.classifierState?.staticTop)}
+              </p>
+              <p className="mt-2 font-mono">
+                db:{formatTopCandidates(debugSnapshot.classifierState?.knnTop)}
+              </p>
+              <p className="mt-2 font-mono">
+                margin:{debugSnapshot.controlState?.margin?.toFixed(3) ?? '—'} release:{debugSnapshot.controlState?.awaitingRelease ? '1' : '0'} lock:{debugSnapshot.controlState?.gestureLocked ? '1' : '0'}
+              </p>
+              <p className="mt-2 font-mono">
                 gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} crossed_IM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb_role:{debugSnapshot.featureState?.thumbRole ?? '—'} palm:{debugSnapshot.featureState?.palmOrientation ?? '—'}
               </p>
-              <p className="mt-2 font-mono text-amber-300">
+              <p className="mt-2 font-mono text-amber-200">
                 2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}
               </p>
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-slate-300">
-              <p className="font-semibold text-brand-200">Ejes / orientacion</p>
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Ejes / orientacion</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>camDir:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
                 <p>locDir:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
+                <p>camVec:{formatFingerVectors(debugSnapshot.directionState?.cameraVectors)}</p>
+                <p>locVec:{formatFingerVectors(debugSnapshot.directionState?.localVectors)}</p>
                 <p>axisX:{formatVector2(debugSnapshot.directionState?.screenAxes?.x)} axisY:{formatVector2(debugSnapshot.directionState?.screenAxes?.y)}</p>
                 <p>normal:{formatVector3(debugSnapshot.directionState?.palmNormal)}</p>
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-slate-300">
-              <p className="font-semibold text-brand-200">Gesto hola</p>
+            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
+              <p className="font-semibold text-white">Gestos / lexico</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>nearHead:{currentGestureFrame?.nearHead ? '1' : '0'} twoFinger:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'}</p>
                 <p>palmFacing:{currentGestureFrame?.palmFacingCamera ? '1' : '0'} score:{currentGestureFrame?.palmFacingScore?.toFixed(3) ?? '—'}</p>
                 <p>ratioHead:{gestureDebug?.nearHeadRatio?.toFixed(2) ?? '—'} ratio2F:{gestureDebug?.twoFingerRatio?.toFixed(2) ?? '—'}</p>
                 <p>ratioPalm:{gestureDebug?.palmFacingRatio?.toFixed(2) ?? '—'} ratioOk:{gestureDebug?.reliableRatio?.toFixed(2) ?? '—'}</p>
-                <p>rangeX:{gestureDebug?.recentRangeX?.toFixed(3) ?? '—'} frames:{gestureDebug?.frameCount ?? 0} suppress:{gestureDebug?.suppressStatic ? '1' : '0'}</p>
+                <p>rangeX:{gestureDebug?.recentRangeX?.toFixed(3) ?? '—'} hands2:{gestureDebug?.twoHandsRatio?.toFixed(2) ?? '—'} frames:{gestureDebug?.frameCount ?? 0} suppress:{gestureDebug?.suppressStatic ? '1' : '0'}</p>
                 {gestureDebug?.detectionDebug && (
-                  <p className="text-accent-300">
-                    detectado conf:{gestureDebug.detectionDebug?.nearHeadRatio?.toFixed(2) ?? '—'} swing:{gestureDebug.detectionDebug?.maxSwingAmplitude?.toFixed(3) ?? '—'}
+                  <p className="text-emerald-200">
+                    detectado metodo:{gestureDebug.detectionDebug?.method ?? 'heur'} boost:{gestureDebug.detectionDebug?.boosted ? '1' : '0'} dist:{gestureDebug.detectionDebug?.minDistance?.toFixed(3) ?? '—'} swing:{gestureDebug.detectionDebug?.maxSwingAmplitude?.toFixed(3) ?? '—'}
+                  </p>
+                )}
+                {gestureDebug?.detectionDebug?.topModelCandidates?.length > 0 && (
+                  <p className="text-sky-200">
+                    model:{formatTopCandidates(
+                      gestureDebug.detectionDebug.topModelCandidates.map((candidate) => ({
+                        letter: candidate.gesture,
+                        confidence: candidate.confidence,
+                      }))
+                    )}
                   </p>
                 )}
               </div>
@@ -1953,106 +2285,147 @@ export default function TranslatorPage() {
         )
       )}
 
-      {/* ─── Bottom subtitle panel ─── */}
       <div
-        className="absolute inset-x-0 bottom-0 z-10 px-3 sm:px-4"
+        className="absolute inset-x-0 bottom-0 z-10 px-4"
         style={{ paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
       >
-        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-brand-500/25 bg-gradient-to-r from-slate-900/75 via-brand-950/50 to-slate-900/75 px-3 py-2.5 shadow-xl shadow-brand-500/5 backdrop-blur-2xl sm:rounded-3xl sm:p-4">
-          <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:flex-row sm:gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-brand-300 sm:text-[10px]">{t('translator.current_word')}</p>
-              <p className="mt-0.5 text-base font-bold tracking-[0.2em] text-white sm:mt-1 sm:text-xl sm:tracking-[0.24em]">
-                {formatSpelledWord(wordBuffer)}
-              </p>
-              {liveDecodedWord?.changed && (
-                <p className="mt-1 text-[11px] text-accent-300">
-                  {t('translator.interpreting_as').replace('{raw}', liveDecodedWord.normalized).replace('{corrected}', liveDecodedWord.corrected)}
-                </p>
-              )}
-              {lastGestureWord && currentDetectionType === 'gesture' && (
-                <p className="mt-1 text-[11px] text-brand-300">
-                  {t('translator.gesture_recognized').replace('{word}', lastGestureWord)}
-                </p>
+        <div className="mx-auto max-w-4xl rounded-[1.25rem] border border-white/10 bg-black/50 p-3 backdrop-blur-xl sm:rounded-[2rem] sm:p-4">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">{mainPanelTitle}</p>
+              {isVoiceToSignMode ? (
+                <>
+                  <p className="font-readable mt-2 text-sm font-medium text-zinc-300 sm:text-base">
+                    {voiceLiveSource || 'Esperando voz...'}
+                  </p>
+                  {voiceInterim && (
+                    <p className="mt-2 text-xs text-cyan-200">
+                      Capturando en tiempo real...
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-base font-semibold tracking-[0.24em] text-white sm:text-lg sm:tracking-[0.28em]">
+                    {formatSpelledWord(wordBuffer)}
+                  </p>
+                  {liveDecodedWord?.changed && (
+                    <p className="mt-2 text-xs text-emerald-200">
+                      Interpretando "{liveDecodedWord.normalized}" como "{liveDecodedWord.corrected}"
+                    </p>
+                  )}
+                  {lastGestureWord && currentDetectionType === 'gesture' && (
+                    <p className="mt-2 text-xs text-sky-200">
+                      Gesto reconocido: "{lastGestureWord}"
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
-            <div className="shrink-0 rounded-lg border border-white/8 bg-white/5 px-2.5 py-1.5 text-right text-[10px] sm:rounded-xl sm:px-3 sm:py-2 sm:text-[11px]">
-              <p className={handPresent ? 'font-medium text-accent-300' : 'text-slate-400'}>{handPresent ? t('translator.hand_visible') : t('translator.no_hand')}</p>
-              <p className="mt-0.5 hidden text-slate-500 sm:block">{t('translator.auto_speak')}</p>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-zinc-300 sm:text-right">
+              {isVoiceToSignMode ? (
+                <>
+                  <p>{speechListening ? 'Microfono activo' : 'Microfono en pausa'}</p>
+                  <p className="mt-1 text-zinc-400">Salida visual por deletreo legible</p>
+                </>
+              ) : (
+                <>
+                  <p>{handPresent ? 'Mano visible' : 'Sin mano'}</p>
+                  <p className="mt-1 text-zinc-400">Se habla automaticamente al cerrar palabra</p>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Subtitle area */}
-          <div className="space-y-1 border-t border-white/8 pt-2 sm:space-y-1.5 sm:pt-3">
-            {recentLines.map((line, index) => (
-              <p key={`${line}-${index}`} className="text-[11px] text-slate-500 sm:text-sm">
+          <div className="space-y-2">
+            {(isVoiceToSignMode ? recentVoiceLines : recentLines).map((line, index) => (
+              <p key={`${line}-${index}`} className="text-xs text-zinc-400 sm:text-sm">
                 {line}
               </p>
             ))}
 
-            <p className="min-h-[2rem] text-lg font-bold leading-snug text-white sm:min-h-[2.5rem] sm:text-2xl md:text-3xl">
-              {liveSubtitle || <span className="text-slate-500 text-sm sm:text-base">{t('translator.subtitle_placeholder')}</span>}
-            </p>
+            {isVoiceToSignMode ? (
+              <div className="min-h-[3.5rem]">
+                <VoiceToSignPreview
+                  text={voiceLiveSource}
+                  compact={isCompactViewport}
+                  placeholder="El deletreo visual aparecera aqui cuando detectemos la voz."
+                />
+              </div>
+            ) : (
+              <>
+                <p className="min-h-[2.5rem] text-xl font-semibold leading-tight text-white sm:text-3xl">
+                  {liveSubtitle || 'Los subtitulos apareceran aqui en cuanto detectemos la mano.'}
+                </p>
 
-            {lastDecodedWord?.changed && (
-              <p className="text-xs text-accent-300">
-                {t('translator.last_correction')}: &ldquo;{lastDecodedWord.normalized}&rdquo; {'→'} &ldquo;{lastDecodedWord.corrected}&rdquo;
-              </p>
+                {lastDecodedWord?.changed && (
+                  <p className="text-xs text-emerald-200">
+                    Ultima correccion: "{lastDecodedWord.normalized}" {'->'} "{lastDecodedWord.corrected}"
+                  </p>
+                )}
+              </>
             )}
           </div>
 
-          {/* Errors */}
-          {(cameraError || detectionError || ttsError) && (
-            <div className="mt-3 space-y-1.5 text-sm">
+          {(cameraError || (!isVoiceToSignMode && detectionError) || ttsError || speechError) && (
+            <div className="mt-4 space-y-2 text-sm">
               {cameraError && (
-                <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
                   {cameraError}
                 </p>
               )}
-              {detectionError && (
-                <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                  {t('translator.model_error')}: {detectionError}
+              {!isVoiceToSignMode && detectionError && (
+                <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
+                  Error del modelo: {detectionError}
                 </p>
               )}
               {ttsError && (
-                <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  {t('translator.audio_label')}: {ttsError}
+                <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-100">
+                  Audio: {ttsError}
+                </p>
+              )}
+              {speechError && (
+                <p className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-cyan-100">
+                  Voz a señas: {speechError}
                 </p>
               )}
             </div>
           )}
 
-          {/* Mobile controls */}
           {isCompactViewport && (
-            <div className="mt-2.5 space-y-2">
+            <div className="mt-4 space-y-3">
               <button
                 type="button"
                 onClick={toggleTranslationMode}
-                className="font-readable w-full rounded-xl border border-emerald-400/30 bg-emerald-500/12 px-3 py-2.5 text-xs font-semibold text-emerald-100 transition active:scale-95 touch-manipulation"
+                className="font-readable w-full rounded-full border border-emerald-400/30 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-lg transition active:scale-95 touch-manipulation"
               >
                 {modeToggleLabel}
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDebug((prev) => !prev)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold text-slate-300 transition active:scale-95 touch-manipulation"
-                >
-                  {showDebug ? t('translator.hide_debug') : t('translator.show_debug')}
-                </button>
+              <div className="grid grid-cols-2 gap-3">
+                {!isVoiceToSignMode ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDebug((prev) => !prev)}
+                    className="rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-lg transition active:scale-95 touch-manipulation"
+                  >
+                    {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+                  </button>
+                ) : (
+                  <div className="rounded-full border border-white/10 bg-black/40 px-4 py-3 text-center text-sm font-semibold text-zinc-400">
+                    Speech local
+                  </div>
+                )}
 
                 <button
                   type="button"
                   onClick={toggleTranslation}
-                  className={`rounded-xl px-3 py-2.5 text-xs font-semibold shadow-lg transition active:scale-95 touch-manipulation ${
-                    isActive
-                      ? 'bg-red-500/90 text-white'
-                      : 'bg-brand-500 text-white shadow-brand-500/25'
+                  className={`rounded-full px-4 py-3 text-sm font-semibold shadow-lg transition active:scale-95 touch-manipulation ${
+                    isActive ? 'bg-red-500 text-white' : 'bg-brand-500 text-white'
                   }`}
                 >
-                  {isActive ? t('translator.pause') : t('translator.start')}
+                  {startActionLabel}
                 </button>
               </div>
             </div>
@@ -2060,7 +2433,6 @@ export default function TranslatorPage() {
         </div>
       </div>
 
-      {/* ─── Desktop floating controls ─── */}
       {!isCompactViewport && (
         <>
           <div
@@ -2070,7 +2442,7 @@ export default function TranslatorPage() {
             <button
               type="button"
               onClick={toggleTranslationMode}
-              className="font-readable rounded-2xl border border-emerald-400/30 bg-emerald-500/12 px-5 py-3 text-sm font-semibold text-emerald-100 shadow-2xl transition active:scale-95 touch-manipulation"
+              className="font-readable rounded-full border border-emerald-400/30 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-2xl transition active:scale-95 touch-manipulation sm:px-5 sm:py-4"
             >
               {modeToggleLabel}
             </button>
@@ -2078,42 +2450,36 @@ export default function TranslatorPage() {
             <button
               type="button"
               onClick={toggleTranslation}
-              className={`flex items-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold shadow-2xl transition active:scale-95 touch-manipulation ${
+              className={`rounded-full px-4 py-3 text-sm font-semibold shadow-2xl transition active:scale-95 touch-manipulation sm:px-5 sm:py-4 ${
                 isActive
-                  ? 'bg-red-500/90 text-white shadow-red-500/20'
-                  : 'bg-brand-500 text-white shadow-brand-500/30 hover:bg-brand-600'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-brand-500 text-white'
               }`}
             >
-              {isActive ? (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
-              )}
-              {isActive ? t('translator.pause_translation') : t('translator.start_translation')}
+              {startActionLabel}
             </button>
           </div>
 
-
-          <button
-            type="button"
-            onClick={() => setShowDebug((prev) => !prev)}
-            className="absolute left-3 z-20 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm font-semibold text-slate-300 shadow-xl backdrop-blur-xl transition hover:bg-slate-800/80 active:scale-95 touch-manipulation sm:left-4"
-            style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
-          >
-            {showDebug ? t('translator.hide_debug') : t('translator.show_debug')}
-          </button>
+          {!isVoiceToSignMode && (
+            <button
+              type="button"
+              onClick={() => setShowDebug((prev) => !prev)}
+              className="absolute left-3 z-20 rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-2xl transition active:scale-95 touch-manipulation sm:left-4 sm:px-5 sm:py-4"
+              style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
+            >
+              {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+            </button>
+          )}
         </>
       )}
 
-      {/* Exit button */}
       <button
         type="button"
         onClick={() => navigate('/')}
-        className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:bg-slate-800/80 active:scale-95 touch-manipulation sm:right-4 sm:top-4"
+        className="absolute right-3 top-3 z-20 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white shadow-xl backdrop-blur-md transition active:scale-95 touch-manipulation sm:right-4 sm:top-4"
         style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
       >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        {t('translator.exit')}
+        Salir
       </button>
     </section>
   )

@@ -11,6 +11,8 @@
  * - Mantener todo configurable en un solo archivo.
  */
 
+import { SIGN_LEXICON_WORDS } from './SignMap.js'
+
 const LETTER_CONFUSIONS = {
   a: ['s', 'e'],
   b: ['w', 'd'],
@@ -39,43 +41,11 @@ const LETTER_CONFUSIONS = {
 
 // Palabras frecuentes para el demo y contextos de accesibilidad.
 // Puedes ampliar esta lista segun el flujo que quieran presentar.
-const SPELLING_LEXICON = [
-  { word: 'hola', priority: 1.0 },
-  { word: 'adios', priority: 0.9 },
-  { word: 'gracias', priority: 0.9 },
-  { word: 'favor', priority: 0.8 },
-  { word: 'ayuda', priority: 1.0 },
-  { word: 'doctor', priority: 0.9 },
-  { word: 'hospital', priority: 0.9 },
-  { word: 'agua', priority: 0.8 },
-  { word: 'bano', priority: 0.8 },
-  { word: 'comida', priority: 0.7 },
-  { word: 'dolor', priority: 0.9 },
-  { word: 'medicina', priority: 0.8 },
-  { word: 'nombre', priority: 0.8 },
-  { word: 'amigo', priority: 0.7 },
-  { word: 'amiga', priority: 0.7 },
-  { word: 'familia', priority: 0.7 },
-  { word: 'mama', priority: 0.7 },
-  { word: 'papa', priority: 0.7 },
-  { word: 'si', priority: 0.8 },
-  { word: 'no', priority: 0.8 },
-  { word: 'bien', priority: 0.7 },
-  { word: 'mal', priority: 0.7 },
-  { word: 'trabajo', priority: 0.6 },
-  { word: 'escuela', priority: 0.6 },
-  { word: 'telefono', priority: 0.6 },
-  { word: 'mensaje', priority: 0.6 },
-  { word: 'interprete', priority: 0.9 },
-  { word: 'sordo', priority: 0.7 },
-  { word: 'sorda', priority: 0.7 },
-  { word: 'hablar', priority: 0.6 },
-  { word: 'escuchar', priority: 0.6 },
-  { word: 'practica', priority: 0.5 },
-  { word: 'aprender', priority: 0.5 },
-  { word: 'senas', priority: 0.7 },
-  { word: 'holaa', priority: 0.2 },
-]
+const SPELLING_LEXICON = SIGN_LEXICON_WORDS.map((entry) => ({
+  normalized: sanitizeWord(entry.word),
+  output: entry.spoken ?? entry.word,
+  priority: entry.priority ?? 0.7,
+}))
 
 function sanitizeWord(word) {
   return word
@@ -163,11 +133,12 @@ function getAcceptanceThreshold(length) {
 }
 
 function scoreCandidate(input, candidate) {
-  const distance = weightedDistance(input, candidate.word)
+  const distance = weightedDistance(input, candidate.normalized)
   const priorityBonus = candidate.priority * 0.2
 
   return {
-    word: candidate.word,
+    normalized: candidate.normalized,
+    output: candidate.output,
     distance,
     score: distance - priorityBonus,
     priority: candidate.priority,
@@ -241,17 +212,19 @@ export function decodeFingerSpelling(rawWord) {
 
   const threshold = getAcceptanceThreshold(best.sourceVariant.length)
   const accepted = best.distance <= threshold
-  const confidence = Math.max(0, 1 - best.distance / Math.max(best.word.length, 1))
+  const comparisonLength = Math.max(best.normalized?.length ?? 0, 1)
+  const confidence = Math.max(0, 1 - best.distance / comparisonLength)
+  const outputWord = best.output || normalized
 
   return {
     raw: rawWord,
     normalized,
-    corrected: accepted ? best.word : normalized,
-    changed: accepted && best.word !== normalized,
+    corrected: accepted ? outputWord : normalized,
+    changed: accepted && sanitizeWord(outputWord) !== normalized,
     confidence,
     reason: accepted ? 'lexicon_match' : 'raw_kept',
     distance: best.distance,
-    matchedWord: best.word,
+    matchedWord: outputWord,
     sourceVariant: best.sourceVariant,
   }
 }
