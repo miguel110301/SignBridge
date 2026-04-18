@@ -21,6 +21,7 @@ import elevenRoute  from './routes/elevenlabs.js'
 import geminiRoute  from './routes/gemini.js'
 import progressRoute from './routes/progress.js'
 import trainingRoute from './routes/training.js'
+import learningRoute from './routes/learning.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,6 +52,7 @@ app.use('/api/practice', geminiRoute)
 app.use('/api/progress', progressRoute)
 app.use('/api/training', trainingRoute)
 app.use('/api/auth', authRoute)
+app.use('/api/learning', learningRoute)
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }))

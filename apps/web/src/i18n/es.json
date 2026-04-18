@@ -1,0 +1,287 @@
+{
+  "nav": {
+    "translate": "Traductor",
+    "practice": "Práctica",
+    "training": "Entrenamiento",
+    "academy": "Academia",
+    "login": "Iniciar sesión",
+    "logout": "Salir"
+  },
+  "hero": {
+    "badge": "Inclusión Digital",
+    "title": "Yo también hablo tu idioma",
+    "subtitle": "SignBridge conecta a pacientes sordos con nuestros profesionales de la salud a través de tecnología intuitiva, garantizando una atención médica clara, empática y sin barreras.",
+    "cta": "Iniciar traducción",
+    "secondary_cta": "Ver repositorio"
+  },
+  "features": {
+    "live_translate": {
+      "tag": "Traducción en vivo",
+      "title": "Live Translate",
+      "desc": "Traducción en tiempo real de Señas a Texto usando nuestra IA empática.",
+      "cta": "Iniciar stream"
+    },
+    "text_to_sign": {
+      "tag": "Texto a señas",
+      "title": "Texto a Señas",
+      "desc": "Convierte mensajes escritos en avatares de lengua de señas.",
+      "cta": "Abrir teclado"
+    }
+  },
+  "values": {
+    "title": "Nuestros valores",
+    "subtitle": "No son ellos quienes no nos entienden. Somos nosotros quienes no los entendemos a ellos.",
+    "items": [
+      {
+        "icon": "empathy",
+        "title": "Empatía primero",
+        "desc": "Cada función está diseñada pensando en cómo se siente la persona sorda, no solo en cómo funciona la tecnología."
+      },
+      {
+        "icon": "bridge",
+        "title": "Puente, no muro",
+        "desc": "No 'arreglamos' a nadie. Creamos un puente bidireccional entre dos formas igualmente válidas de comunicarse."
+      },
+      {
+        "icon": "access",
+        "title": "Acceso universal",
+        "desc": "Sin hardware especial, sin costos ocultos. Solo un teléfono y la voluntad de comunicarte."
+      },
+      {
+        "icon": "voice",
+        "title": "Su voz, su elección",
+        "desc": "Cada persona sorda elige cómo quiere ser escuchada. La tecnología se adapta a la persona, no al revés."
+      }
+    ]
+  },
+  "recent": {
+    "title": "Conexiones recientes",
+    "view_history": "Ver historial",
+    "sign_to_text": "Señas a texto",
+    "text_to_sign": "Texto a señas",
+    "hours_ago": "hace {n} horas",
+    "yesterday": "Ayer"
+  },
+  "stats": {
+    "phrases_mastered": "Frases dominadas"
+  },
+  "practice": {
+    "title": "Modo Práctica",
+    "desc": "Mejora tu fluidez en lengua de señas con ejercicios personalizados.",
+    "pick_letter": "Elige una letra para practicar",
+    "show_sign": "Muestra esta seña a la cámara",
+    "waiting_hand": "Esperando tu mano…",
+    "detecting": "Detectando…",
+    "hold_steady": "¡Mantén la posición!",
+    "try_sign": "Intenta signar",
+    "correct": "¡Correcto!",
+    "try_again": "Casi — inténtalo de nuevo",
+    "score": "Puntuación",
+    "best_score": "Mejor",
+    "attempts": "Intentos",
+    "mastered": "Dominada",
+    "not_mastered": "Sigue practicando",
+    "next_letter": "Siguiente letra",
+    "retry": "Reintentar",
+    "back": "Volver a letras",
+    "camera_error": "No se pudo acceder a la cámara",
+    "loading_model": "Cargando modelo de IA…",
+    "streak": "Racha",
+    "daily_progress": "Progreso de hoy",
+    "letters_practiced": "Letras practicadas",
+    "accuracy": "Precisión",
+    "time_spent": "Tiempo de sesión",
+    "hint": "Pista",
+    "show_hint": "Mostrar pista",
+    "confidence": "Confianza",
+    "mastery_threshold": "85% para dominar",
+    "congrats_mastered": "¡Dominaste la {letter}!",
+    "progress_saved": "Progreso guardado",
+    "all_mastered": "¡Increíble! ¡Dominaste todas las letras!",
+    "mastered_count": "{n} de {total} dominadas",
+    "filter_all": "Todas",
+    "filter_mastered": "Dominadas",
+    "filter_in_progress": "En progreso",
+    "filter_new": "Nuevas"
+  },
+  "how": {
+    "title": "Cómo funciona",
+    "steps": [
+      {
+        "icon": "🤟",
+        "title": "La persona sorda hace señas",
+        "desc": "La cámara detecta los 21 puntos de la mano en tiempo real. Sin hardware adicional."
+      },
+      {
+        "icon": "🧠",
+        "title": "La IA interpreta",
+        "desc": "MediaPipe y Gemini reconocen cada seña del LSM en milisegundos."
+      },
+      {
+        "icon": "🔊",
+        "title": "La voz se genera",
+        "desc": "El texto traducido se convierte en voz natural. La persona sorda elige con qué voz quiere ser escuchada."
+      }
+    ]
+  },
+  "sponsors": {
+    "title": "Construido con"
+  },
+  "cta": {
+    "title": "No es un demo de cámara.",
+    "title2": "Es una conversación que por fin puede ocurrir.",
+    "desc": "La experiencia está optimizada para móvil porque ahí es donde realmente importa: abrir, apuntar y escuchar.",
+    "button": "Iniciar conversación"
+  },
+  "footer": {
+    "tagline": "Rompiendo barreras de comunicación con IA.",
+    "rights": "Todos los derechos reservados."
+  },
+  "translator": {
+    "loading_title": "SignBridge Live",
+    "loading_desc": "Abriendo cámara y preparando la detección en tiempo real.",
+    "idle_title": "Listo para traducir",
+    "idle_desc": "Toca iniciar, apunta la cámara a la persona que está señando y deja que SignBridge interprete en voz alta.",
+    "letter_detected": "Letra detectada",
+    "gesture_detected": "Gesto detectado",
+    "status_error": "Error IA",
+    "status_loading": "Cargando IA",
+    "status_paused": "En pausa",
+    "status_detecting": "Detectando",
+    "status_waiting": "Esperando mano",
+    "status_camera": "Abriendo cámara",
+    "mirror_view": "Vista espejo",
+    "normal_view": "Vista normal",
+    "audio_fetching": "Preparando audio",
+    "audio_playing": "Reproduciendo",
+    "audio_queued": "Audio en cola",
+    "stable_letter": "Letra estable",
+    "word_pause": "Pausa palabra",
+    "phrase_pause": "Pausa frase",
+    "spelling_gestures": "Deletreo + gestos",
+    "current_word": "Palabra actual",
+    "interpreting_as": "Interpretando \"{raw}\" como \"{corrected}\"",
+    "gesture_recognized": "Gesto reconocido: \"{word}\"",
+    "hand_visible": "Mano visible",
+    "no_hand": "Sin mano",
+    "auto_speak": "Se habla automáticamente al cerrar palabra",
+    "subtitle_placeholder": "Los subtítulos aparecerán aquí en cuanto detectemos la mano.",
+    "last_correction": "Última corrección",
+    "model_error": "Error del modelo",
+    "audio_label": "Audio",
+    "hide_debug": "Debug off",
+    "show_debug": "Debug",
+    "pause": "Pausar",
+    "start": "Iniciar",
+    "pause_translation": "Pausar traducción",
+    "start_translation": "Iniciar traducción",
+    "exit": "Salir"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "register": "Crear cuenta",
+    "login_title": "Accede a tu espacio de aprendizaje",
+    "register_title": "Crea tu cuenta de aprendizaje",
+    "subtitle": "El traductor es abierto, pero tu progreso de práctica y aprendizaje queda vinculado a tu cuenta.",
+    "name_label": "Nombre",
+    "name_placeholder": "Miguel Moreno",
+    "email_label": "Email",
+    "email_placeholder": "tu@email.com",
+    "password_label": "Contraseña",
+    "password_placeholder": "Mínimo 8 caracteres",
+    "submit_login": "Entrar",
+    "submit_register": "Crear cuenta",
+    "submitting": "Procesando…",
+    "sidebar_badge": "SignBridge Learn",
+    "sidebar_title": "Qué quedará vinculado a tu cuenta",
+    "benefit_1": "Progreso por letra y señas dominadas.",
+    "benefit_2": "Preferencias personales de voz y práctica.",
+    "benefit_3": "Módulo de aprendizaje en la siguiente fase.",
+    "or_continue": "o continúa con",
+    "no_account": "¿No tienes cuenta?",
+    "has_account": "¿Ya tienes cuenta?",
+    "create_one": "Crear una",
+    "login_here": "Inicia sesión"
+  },
+  "academy": {
+    "title": "Academia de Lengua de Señas",
+    "subtitle": "Aprende lengua de señas paso a paso, como un juego. Cada lección te acerca a una comunicación fluida.",
+    "my_progress": "Mi Progreso",
+    "streak": "Racha de días",
+    "xp_total": "XP Total",
+    "signs_mastered": "Señas dominadas",
+    "level": "Nivel",
+    "beginner": "Principiante",
+    "intermediate": "Intermedio",
+    "advanced": "Avanzado",
+    "continue_learning": "Continuar aprendiendo",
+    "start_lesson": "Iniciar lección",
+    "review": "Repasar",
+    "locked": "Bloqueado",
+    "completed": "Completado",
+    "in_progress": "En progreso",
+    "hearts": "Vidas",
+    "xp": "XP",
+    "lesson_complete": "¡Lección completa!",
+    "lesson_complete_desc": "¡Buen trabajo! Ganaste {xp} XP.",
+    "correct": "¡Correcto!",
+    "incorrect": "Incorrecto",
+    "try_again": "Intentar de nuevo",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "skip": "Saltar",
+    "quit_confirm": "¿Seguro que quieres salir? Perderás tu progreso en esta lección.",
+    "quit_yes": "Sí, salir",
+    "quit_no": "Seguir",
+    "daily_goal": "Meta diaria",
+    "daily_goal_desc": "Completa {n} lecciones hoy",
+    "units": {
+      "alphabet": {
+        "title": "El Alfabeto",
+        "desc": "Aprende a signar cada letra de la A a la Z."
+      },
+      "greetings": {
+        "title": "Saludos",
+        "desc": "Hola, adiós y saludos básicos del día a día."
+      },
+      "numbers": {
+        "title": "Números",
+        "desc": "Cuenta del 0 al 20 en lengua de señas."
+      },
+      "common_phrases": {
+        "title": "Frases Comunes",
+        "desc": "Frases esenciales para la comunicación diaria."
+      },
+      "medical": {
+        "title": "Contexto Médico",
+        "desc": "Señas para dolor, síntomas y comunicación hospitalaria."
+      },
+      "emotions": {
+        "title": "Emociones",
+        "desc": "Expresa sentimientos: feliz, triste, asustado y más."
+      }
+    },
+    "lesson_types": {
+      "sign_to_text": "¿Qué seña es esta?",
+      "text_to_sign": "Signa esta letra",
+      "multiple_choice": "Elige la respuesta correcta",
+      "match_pairs": "Conecta los pares",
+      "camera_challenge": "Muestra la seña a la cámara"
+    },
+    "results": {
+      "perfect": "¡Perfecto!",
+      "great": "¡Excelente!",
+      "good": "¡Buen esfuerzo!",
+      "keep_practicing": "¡Sigue practicando!",
+      "accuracy": "Precisión",
+      "time_spent": "Tiempo invertido",
+      "new_signs": "Nuevas señas aprendidas",
+      "back_to_academy": "Volver a la Academia"
+    },
+    "empty_state": {
+      "title": "Comienza tu viaje",
+      "desc": "Empieza con el alfabeto y desbloquea nuevas unidades mientras progresas.",
+      "cta": "Iniciar primera lección"
+    }
+  }
+}

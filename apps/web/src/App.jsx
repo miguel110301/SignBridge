@@ -1,85 +1,49 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import TranslatorPage from './modules/translator/TranslatorPage.jsx'
 import PracticePage   from './modules/practice/PracticePage.jsx'
+import FundamentosLsmModulePage from './modules/practice/FundamentosLsmModulePage.jsx'
+import InteraccionesBasicasModulePage from './modules/practice/InteraccionesBasicasModulePage.jsx'
+import ContextosRealesModulePage from './modules/practice/ContextosRealesModulePage.jsx'
+import {
+  CONTEXTOS_REALES_MODULE_ROUTE,
+  FUNDAMENTALS_MODULE_ROUTE,
+  INTERACCIONES_BASICAS_MODULE_ROUTE,
+} from './modules/practice/moduleRoutes.js'
 import LandingPage    from './modules/landing/LandingPage.jsx'
 import TrainingPage   from './modules/training/TrainingPage.jsx'
+import AcademyPage    from './modules/academy/AcademyPage.jsx'
+import LessonPage     from './modules/academy/LessonPage.jsx'
+import LessonComplete from './modules/academy/LessonComplete.jsx'
 import AuthPage from './modules/auth/AuthPage.jsx'
 import RequireAuth from './modules/auth/RequireAuth.jsx'
-import { useAuth } from './modules/auth/AuthProvider.jsx'
+import Navbar from './components/Navbar.jsx'
+import { useDarkMode } from './hooks/useDarkMode.js'
 
 export default function App() {
   const location = useLocation()
   const isImmersiveRoute = location.pathname === '/traductor'
-  const { isAuthenticated, user, logout } = useAuth()
+  const isLessonRoute = location.pathname.startsWith('/academia/leccion')
+  const { isDark, toggle: toggleDark } = useDarkMode()
 
   return (
-    <div className={isImmersiveRoute ? 'h-[100dvh] bg-black' : 'min-h-screen flex flex-col'}>
-      {!isImmersiveRoute && (
-        <nav className="border-b border-zinc-800 px-4 py-4 sm:px-6">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <NavLink to="/" className="text-lg font-bold tracking-tight text-brand-500 sm:text-xl">
-              SignBridge
-            </NavLink>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              <NavLink
-                to="/traductor"
-                className={({ isActive }) =>
-                  isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
-                }
-              >
-                Traductor
-              </NavLink>
-              <NavLink
-                to="/practica"
-                className={({ isActive }) =>
-                  isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
-                }
-              >
-                Practica
-              </NavLink>
-              <NavLink
-                to="/entrenamiento"
-                className={({ isActive }) =>
-                  isActive ? 'font-medium text-white' : 'text-emerald-400 transition-colors hover:text-emerald-300'
-                }
-              >
-                Entrenamiento
-              </NavLink>
-              {isAuthenticated ? (
-                <>
-                  <span className="max-w-[12rem] truncate text-zinc-400">
-                    {user?.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="text-zinc-400 transition-colors hover:text-white"
-                  >
-                    Salir
-                  </button>
-                </>
-              ) : (
-                <NavLink
-                  to="/login"
-                  className={({ isActive }) =>
-                    isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
-                  }
-                >
-                  Login
-                </NavLink>
-              )}
-            </div>
-          </div>
-        </nav>
+    <div className={isImmersiveRoute ? 'h-[100dvh] bg-black' : 'min-h-screen flex flex-col bg-neutral-50 dark:bg-zinc-950'}>
+      {!isImmersiveRoute && !isLessonRoute && (
+        <Navbar isDark={isDark} onToggleDark={toggleDark} />
       )}
 
-      <main className={isImmersiveRoute ? 'h-full' : 'flex-1'}>
+      <main className={isImmersiveRoute ? 'h-full' : 'flex-1 pb-20 md:pb-0'}>
         <Routes>
           <Route path="/"           element={<LandingPage />} />
           <Route path="/login"      element={<AuthPage />} />
           <Route path="/traductor"  element={<TranslatorPage />} />
           <Route path="/practica"   element={<RequireAuth><PracticePage /></RequireAuth>} />
+          <Route path={FUNDAMENTALS_MODULE_ROUTE} element={<RequireAuth><FundamentosLsmModulePage /></RequireAuth>} />
+          <Route path={INTERACCIONES_BASICAS_MODULE_ROUTE} element={<RequireAuth><InteraccionesBasicasModulePage /></RequireAuth>} />
+          <Route path={CONTEXTOS_REALES_MODULE_ROUTE} element={<RequireAuth><ContextosRealesModulePage /></RequireAuth>} />
           <Route path="/entrenamiento" element={<RequireAuth><TrainingPage /></RequireAuth>} />
+          <Route path="/academia"   element={<RequireAuth><AcademyPage /></RequireAuth>} />
+          <Route path="/academia/leccion/:unitId/:lessonId" element={<RequireAuth><LessonPage /></RequireAuth>} />
+          <Route path="/academia/resultado/:unitId/:lessonId" element={<RequireAuth><LessonComplete /></RequireAuth>} />
         </Routes>
       </main>
     </div>

@@ -1,280 +1,188 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { assessHandDetectionQuality, extractHandFeatures } from '@signbridge/sign-engine'
-import { useHandDetection } from '../../hooks/useHandDetection.js'
-import { requestCameraStream, stopCameraStream } from '../../utils/cameraStream.js'
-import { requestPracticeFeedback } from './practiceClient.js'
+import { useEffect, useMemo, useState } from 'react'
+import Badge from './components/Badge.jsx'
+import MaxWidthWrapper from './components/MaxWidthWrapper.jsx'
+import MissionList from './components/MissionList.jsx'
+import ModulePathCard from './components/ModulePathCard.jsx'
+import { useAuth } from '../auth/AuthProvider.jsx'
+import { completePracticeMission, fetchPracticeModules } from './practiceClient.js'
+import { getPracticeModuleDetailPath } from './moduleRoutes.js'
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+function resolveActiveModuleId(currentModuleId, nextModules) {
+	if (currentModuleId && nextModules.some((moduleItem) => moduleItem.id === currentModuleId)) {
+		return currentModuleId
+	}
 
-function captureVideoFrame(video) {
-  if (!video?.videoWidth || !video?.videoHeight) return null
-
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-  return canvas.toDataURL('image/jpeg', 0.92)
-}
-
-function drawOverlay(canvas, video, hands, handQuality) {
-  if (!canvas || !video) return
-
-  const ctx = canvas.getContext('2d')
-  const width = canvas.clientWidth
-  const height = canvas.clientHeight
-  canvas.width = width
-  canvas.height = height
-  ctx.clearRect(0, 0, width, height)
-
-  const primaryHand = hands?.[0]
-  if (!primaryHand?.landmarks?.length) return
-
-  const xs = primaryHand.landmarks.map((point) => point.x)
-  const ys = primaryHand.landmarks.map((point) => point.y)
-  const minX = Math.min(...xs) * width
-  const maxX = Math.max(...xs) * width
-  const minY = Math.min(...ys) * height
-  const maxY = Math.max(...ys) * height
-
-  const stroke =
-    handQuality?.status === 'good'
-      ? 'rgba(34, 197, 94, 0.95)'
-      : handQuality?.status === 'fair'
-        ? 'rgba(245, 158, 11, 0.95)'
-        : 'rgba(239, 68, 68, 0.95)'
-
-  ctx.lineWidth = 3
-  ctx.strokeStyle = stroke
-  ctx.fillStyle = stroke.replace('0.95', '0.08')
-  ctx.beginPath()
-  ctx.rect(minX, minY, maxX - minX, maxY - minY)
-  ctx.fill()
-  ctx.stroke()
-}
-
-function formatStatus(status) {
-  if (status === 'good') return 'verde'
-  if (status === 'fair') return 'amarillo'
-  return 'rojo'
+	return (
+		nextModules.find((moduleItem) => moduleItem.completionRate < 100)?.id
+		|| nextModules[0]?.id
+		|| null
+	)
 }
 
 export default function PracticePage() {
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const [selectedLetter, setSelectedLetter] = useState('A')
-  const [readyState, setReadyState] = useState(false)
-  const [handQuality, setHandQuality] = useState(null)
-  const [featureSummary, setFeatureSummary] = useState(null)
-  const [handsCount, setHandsCount] = useState(0)
-  const [feedback, setFeedback] = useState(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [message, setMessage] = useState('')
+	const { token } = useAuth()
+	const [modules, setModules] = useState([])
+	const [activeModuleId, setActiveModuleId] = useState(null)
+	const [loading, setLoading] = useState(true)
+	const [error, setError] = useState('')
+	const [actionError, setActionError] = useState('')
+	const [completingMissionId, setCompletingMissionId] = useState(null)
+	const [reloadNonce, setReloadNonce] = useState(0)
 
-  const handleLandmarks = useCallback((landmarks, frameMeta = {}) => {
-    const quality = assessHandDetectionQuality(landmarks)
-    const features = extractHandFeatures(landmarks, frameMeta.handWorldLandmarks)
+	useEffect(() => {
+		let isActive = true
 
-    setHandQuality(quality)
-    setHandsCount(frameMeta.handsCount ?? 1)
-    setFeatureSummary(
-      features
-        ? {
-            thumbRole: features.thumb_role,
-            gapIM: Number(features.gap_IM.toFixed(3)),
-            crossedIM: features.crossed_IM,
-            palmOrientation: features.palm_orientation,
-            cameraDirections: features.camera_directions,
-          }
-        : null
-    )
+		async function loadModules() {
+			if (!token) return
 
-    drawOverlay(canvasRef.current, videoRef.current, frameMeta.hands ?? null, quality)
-  }, [])
+			setLoading(true)
+			setError('')
+			setActionError('')
 
-  const { videoRef: hookVideoRef, ready, error } = useHandDetection({
-    onLandmarks: handleLandmarks,
-    enabled: true,
-  })
+			try {
+				const payload = await fetchPracticeModules(token)
+				if (!isActive) return
 
-  useEffect(() => {
-    let mounted = true
-    let streamRef = null
+				const nextModules = Array.isArray(payload.modules) ? payload.modules : []
+				setModules(nextModules)
+				setActiveModuleId((currentModuleId) => resolveActiveModuleId(currentModuleId, nextModules))
+			} catch (requestError) {
+				if (!isActive) return
+				setModules([])
+				setActiveModuleId(null)
+				setError(requestError.message || 'No se pudieron cargar los modulos.')
+			} finally {
+				if (isActive) {
+					setLoading(false)
+				}
+			}
+		}
 
-    if (videoRef.current) {
-      hookVideoRef.current = videoRef.current
-      requestCameraStream({ preferredFacingMode: 'user' })
-        .then((stream) => {
-          if (!mounted || !videoRef.current) {
-            stopCameraStream(stream)
-            return
-          }
+		loadModules()
 
-          streamRef = stream
-          videoRef.current.srcObject = stream
-          return videoRef.current.play()
-        })
-        .then(() => {
-          if (mounted) setReadyState(true)
-        })
-        .catch((streamError) => {
-          console.error('[Practice] Camera error:', streamError)
-          if (mounted) setReadyState(false)
-        })
-    }
+		return () => {
+			isActive = false
+		}
+	}, [reloadNonce, token])
 
-    return () => {
-      mounted = false
-      stopCameraStream(streamRef)
-    }
-  }, [hookVideoRef])
+	async function handleCompleteMission(missionId) {
+		if (!token || !missionId) return
 
-  const handleAnalyze = useCallback(async () => {
-    if (!videoRef.current) return
+		setCompletingMissionId(missionId)
+		setActionError('')
 
-    const imageBase64 = captureVideoFrame(videoRef.current)
-    if (!imageBase64) {
-      setMessage('No pude capturar la imagen actual de la camara.')
-      return
-    }
+		try {
+			await completePracticeMission(missionId, token)
+			const payload = await fetchPracticeModules(token)
+			const nextModules = Array.isArray(payload.modules) ? payload.modules : []
 
-    setIsAnalyzing(true)
-    setMessage('')
-    setFeedback(null)
+			setModules(nextModules)
+			setActiveModuleId((currentModuleId) => resolveActiveModuleId(currentModuleId, nextModules))
+		} catch (requestError) {
+			setActionError(requestError.message || 'No se pudo completar la mision.')
+		} finally {
+			setCompletingMissionId(null)
+		}
+	}
 
-    try {
-      const result = await requestPracticeFeedback({
-        imageBase64,
-        targetSign: selectedLetter,
-        targetType: 'letter',
-        handCount: handsCount,
-        handQuality,
-        featureSummary,
-      })
+	const activeModule = useMemo(
+		() => modules.find((moduleItem) => moduleItem.id === activeModuleId) ?? modules[0] ?? null,
+		[activeModuleId, modules]
+	)
 
-      setFeedback(result)
-    } catch (analysisError) {
-      console.error('[Practice] Gemini error:', analysisError)
-      setMessage('No se pudo obtener feedback de Gemini.')
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }, [selectedLetter, handsCount, handQuality, featureSummary])
+	if (loading) {
+		return (
+			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
+					Cargando ruta de aprendizaje...
+				</div>
+			</div>
+		)
+	}
 
-  return (
-    <div className="min-h-[calc(100dvh-65px)] bg-zinc-950 px-4 py-4 text-white sm:px-6 sm:py-6">
-      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="relative min-h-[38dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-black sm:min-h-[44dvh]">
-          <video
-            ref={videoRef}
-            className="h-full min-h-[38dvh] w-full object-contain sm:min-h-[44dvh]"
-            muted
-            playsInline
-          />
-          <canvas
-            ref={canvasRef}
-            className="pointer-events-none absolute inset-0 h-full w-full"
-          />
-          {(!ready || !readyState) && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-              <p className="text-sm text-zinc-300">Cargando camara y MediaPipe...</p>
-            </div>
-          )}
-          {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-red-950/70 p-6 text-center">
-              <p className="text-sm text-red-200">No se pudo inicializar la deteccion: {error}</p>
-            </div>
-          )}
+	if (error) {
+		return (
+			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+				<div className="max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-6">
+					<p className="text-sm text-red-100">{error}</p>
+					<button
+						type="button"
+						onClick={() => setReloadNonce((value) => value + 1)}
+						className="mt-4 rounded-md border border-red-300/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-red-100 transition-colors hover:bg-red-500/20"
+					>
+						Reintentar
+					</button>
+				</div>
+			</div>
+		)
+	}
 
-          <div className="absolute left-3 right-3 top-3 rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-[11px] backdrop-blur-xl sm:left-4 sm:right-auto sm:max-w-xs sm:text-xs">
-            <p className="font-semibold uppercase tracking-[0.2em] text-cyan-200">Practica LSM</p>
-            <p className="mt-2 font-mono">letra:{selectedLetter} hands:{handsCount}</p>
-            <p className="mt-1 font-mono">
-              caja:{formatStatus(handQuality?.status)} usable:{handQuality?.reliable ? '1' : '0'} score:{handQuality?.qualityScore?.toFixed(2) ?? '—'}
-            </p>
-          </div>
-        </section>
+	if (modules.length === 0 || !activeModule) {
+		return (
+			<div className="flex min-h-[calc(100vh-65px)] items-center justify-center bg-[#030712] px-4 text-white">
+				<div className="rounded-2xl border border-[#1c2740] bg-[#0a1324] px-6 py-5 text-sm text-[#9db0d2]">
+					Aun no hay modulos disponibles en la base de datos.
+				</div>
+			</div>
+		)
+	}
 
-        <aside className="space-y-5 rounded-[2rem] border border-white/10 bg-zinc-900/80 p-4 backdrop-blur-xl sm:p-5">
-          <div>
-            <h2 className="text-2xl font-bold">Practica con Gemini</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Captura una pose estatica y recibe feedback especifico sobre la letra objetivo.
-            </p>
-          </div>
+	return (
+		<div className="min-h-[calc(100vh-65px)] bg-[#030712] text-white">
+			<MaxWidthWrapper className="py-9 sm:py-12">
+				<div className="max-w-[1140px]">
+					<Badge>PRACTICE MODE</Badge>
+					<h1 className="mt-4 text-[2.6rem] font-medium tracking-tight text-white sm:text-[3.25rem]">
+						Ruta de aprendizaje
+					</h1>
+				</div>
 
-          <div>
-            <p className="mb-3 text-sm font-medium text-zinc-300">Letra objetivo</p>
-            <div className="flex flex-wrap gap-2">
-              {ALPHABET.map((letter) => (
-                <button
-                  key={letter}
-                  type="button"
-                  onClick={() => setSelectedLetter(letter)}
-                  className={`h-10 w-10 rounded-xl text-sm font-bold transition-colors ${
-                    selectedLetter === letter
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  }`}
-                >
-                  {letter}
-                </button>
-              ))}
-            </div>
-          </div>
+				<section className="mt-10 grid gap-14 lg:grid-cols-[1.08fr_0.92fr] xl:gap-20">
+					<div>
+						<h2 className="mb-8 text-xs font-semibold uppercase tracking-[0.24em] text-[#9fb0d8]">
+							Modulos
+						</h2>
 
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={isAnalyzing || !handQuality?.reliable}
-            className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-          >
-            {isAnalyzing ? 'Analizando...' : 'Analizar con Gemini'}
-          </button>
+						<div className="space-y-8">
+							{modules.map((moduleItem, index) => (
+								<ModulePathCard
+									key={moduleItem.id}
+									moduleItem={moduleItem}
+									isActive={moduleItem.id === activeModule?.id}
+									isLast={index === modules.length - 1}
+									onSelect={setActiveModuleId}
+									detailPath={getPracticeModuleDetailPath(moduleItem.title)}
+								/>
+							))}
+						</div>
+					</div>
 
-          {message && (
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-              {message}
-            </div>
-          )}
+					<div>
+						<p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#5b57ff]">
+							Modulo seleccionado
+						</p>
+						{actionError ? (
+							<p className="mt-3 rounded-md border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-100">
+								{actionError}
+							</p>
+						) : null}
+						<h3 className="mt-4 text-[2.1rem] font-medium leading-tight text-white sm:text-[2.45rem]">
+							{activeModule.title}
+						</h3>
+						<p className="mt-3 max-w-xl text-[1.05rem] leading-relaxed text-[#9db0d2]">
+							{activeModule.description || 'Sin descripcion disponible.'}
+						</p>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-200">
-            <p className="font-semibold text-white">Motor local</p>
-            <div className="mt-2 space-y-1 font-mono text-xs">
-              <p>thumb:{featureSummary?.thumbRole ?? '—'}</p>
-              <p>gap_IM:{featureSummary?.gapIM?.toFixed?.(3) ?? '—'} crossed:{featureSummary?.crossedIM ? '1' : '0'}</p>
-              <p>palm:{featureSummary?.palmOrientation ?? '—'}</p>
-            </div>
-          </div>
-
-          {feedback && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-white">Feedback Gemini</p>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  feedback.correct
-                    ? 'bg-emerald-500/20 text-emerald-200'
-                    : 'bg-rose-500/20 text-rose-200'
-                }`}>
-                  {feedback.score}/100
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-zinc-200">{feedback.feedback}</p>
-              <p className="mt-3 text-xs text-zinc-400">
-                usableForTraining: {feedback.usableForTraining ? 'si' : 'no'}
-              </p>
-              {feedback.issues?.length > 0 && (
-                <p className="mt-2 text-xs text-zinc-400">
-                  issues: {feedback.issues.join(', ')}
-                </p>
-              )}
-              <p className="mt-2 text-xs text-cyan-200">
-                siguiente ajuste: {feedback.recommendation}
-              </p>
-            </div>
-          )}
-        </aside>
-      </div>
-    </div>
-  )
+						<div className="mt-10">
+							<MissionList
+								missions={activeModule.missions}
+								onCompleteMission={handleCompleteMission}
+								completingMissionId={completingMissionId}
+							/>
+						</div>
+					</div>
+				</section>
+			</MaxWidthWrapper>
+		</div>
+	)
 }
