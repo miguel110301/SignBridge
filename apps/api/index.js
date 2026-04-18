@@ -16,6 +16,7 @@ import dotenv from 'dotenv'
 import express    from 'express'
 import cors       from 'cors'
 import mongoose   from 'mongoose'
+import authRoute from './routes/auth.js'
 import elevenRoute  from './routes/elevenlabs.js'
 import geminiRoute  from './routes/gemini.js'
 import progressRoute from './routes/progress.js'
@@ -49,6 +50,7 @@ app.use('/api/speak',    elevenRoute)
 app.use('/api/practice', geminiRoute)
 app.use('/api/progress', progressRoute)
 app.use('/api/training', trainingRoute)
+app.use('/api/auth', authRoute)
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }))

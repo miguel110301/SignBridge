@@ -3,12 +3,14 @@ import TranslatorPage from './modules/translator/TranslatorPage.jsx'
 import PracticePage   from './modules/practice/PracticePage.jsx'
 import LandingPage    from './modules/landing/LandingPage.jsx'
 import TrainingPage   from './modules/training/TrainingPage.jsx'
-
-//comentario de prueba
+import AuthPage from './modules/auth/AuthPage.jsx'
+import RequireAuth from './modules/auth/RequireAuth.jsx'
+import { useAuth } from './modules/auth/AuthProvider.jsx'
 
 export default function App() {
   const location = useLocation()
   const isImmersiveRoute = location.pathname === '/traductor'
+  const { isAuthenticated, user, logout } = useAuth()
 
   return (
     <div className={isImmersiveRoute ? 'h-[100dvh] bg-black' : 'min-h-screen flex flex-col'}>
@@ -42,6 +44,29 @@ export default function App() {
             >
               Entrenamiento
             </NavLink>
+            {isAuthenticated ? (
+              <>
+                <span className="hidden text-zinc-400 sm:inline">
+                  {user?.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="text-zinc-400 transition-colors hover:text-white"
+                >
+                  Salir
+                </button>
+              </>
+            ) : (
+              <NavLink
+                to="/login"
+                className={({ isActive }) =>
+                  isActive ? 'font-medium text-white' : 'text-zinc-400 transition-colors hover:text-white'
+                }
+              >
+                Login
+              </NavLink>
+            )}
           </div>
         </nav>
       )}
@@ -49,9 +74,10 @@ export default function App() {
       <main className={isImmersiveRoute ? 'h-full' : 'flex-1'}>
         <Routes>
           <Route path="/"           element={<LandingPage />} />
+          <Route path="/login"      element={<AuthPage />} />
           <Route path="/traductor"  element={<TranslatorPage />} />
-          <Route path="/practica"   element={<PracticePage />} />
-          <Route path="/entrenamiento" element={<TrainingPage />} />
+          <Route path="/practica"   element={<RequireAuth><PracticePage /></RequireAuth>} />
+          <Route path="/entrenamiento" element={<RequireAuth><TrainingPage /></RequireAuth>} />
         </Routes>
       </main>
     </div>
