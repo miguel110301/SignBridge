@@ -21,6 +21,15 @@ jobs:
             fi
             cd /root/SignBridge
             git pull origin main
-            cd server
+            
+            # 1. Construir el Frontend
+            cd client
             npm install
+            npm run build
+            
+            # 2. Configurar el Server
+            cd ../server
+            npm install
+            
+            # 3. Reiniciar la App
             pm2 restart signbridge-api || pm2 start index.js --name signbridge-api

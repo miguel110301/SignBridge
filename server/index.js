@@ -61,8 +61,18 @@ if (process.env.MONGODB_URI) {
 }
 
 // ── Arrancar ──────────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.send('La API de SignBridge esta funcionando correctamente en el servidor.');
+const path = require('path');
+
+// Asegúrate de que las rutas de tu API estén antes de esto.
+// Por ejemplo: app.use('/api', apiRoutes);
+
+// 1. Servir los archivos estáticos de React
+// (Cambia 'dist' por 'build' si usas Create React App en lugar de Vite)
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// 2. Para cualquier otra ruta que no sea de la API, devolver la aplicación de React
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
 app.listen(PORT, () => {
