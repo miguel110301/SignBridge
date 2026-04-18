@@ -214,9 +214,22 @@ function detectHola(windowFrames, config) {
   const validFrames = windowFrames.filter((frame) => frame.reliableHand)
   if (validFrames.length < (config.minFrames ?? 10)) return null
 
+<<<<<<< HEAD
+  // Filtro de forma de mano: debe ser dos dedos extendidos la mayoría del tiempo
+  const twoFingerRatio = validFrames.filter((f) => f.twoFingerHandshape).length / validFrames.length
+  if (twoFingerRatio < config.minTwoFingerRatio) return null
+
+  // Filtro de posición: la mano debe estar cerca de la cabeza
+  const nearHeadRatio = validFrames.filter((f) => f.nearHead).length / validFrames.length
+  if (nearHeadRatio < config.minNearHeadRatio) return null
+
+  const firstFrame = validFrames[0]
+  const lastFrame = validFrames[validFrames.length - 1]
+=======
   const nearHeadRatio = validFrames.filter((frame) => frame.nearHead).length / validFrames.length
   const twoFingerRatio = validFrames.filter((frame) => frame.twoFingerHandshape).length / validFrames.length
   const palmFacingRatio = validFrames.filter((frame) => frame.palmFacingCamera).length / validFrames.length
+>>>>>>> origin/main
 
   if (nearHeadRatio < (config.minNearHeadRatio ?? 0.55)) return null
   if (twoFingerRatio < (config.minTwoFingerRatio ?? 0.65)) return null
@@ -226,8 +239,29 @@ function detectHola(windowFrames, config) {
     (frame) => frame.nearHead && frame.twoFingerHandshape && frame.palmFacingCamera
   )
 
+<<<<<<< HEAD
+  // Filtro 2: El movimiento debe ser principalmente horizontal.
+  // Si distanceY es muy alto (ej. subiendo la mano a la cabeza), esto da falso y lo ignora.
+  const isHorizontal = distanceX > (distanceY * 1.5)
+
+  // Si cumple todos los filtros, entonces sí es un "Hola"
+  if (isLongEnough && isHorizontal) { 
+    return {
+      gesture: 'hola',
+      word: 'hola',
+      confidence: 0.95,
+      debug: {
+        distanceX,
+        distanceY,
+        twoFingerRatio,
+        nearHeadRatio,
+        frameCount: windowFrames.length,
+      },
+    }
+=======
   if (activeFrames.length < Math.max(6, Math.ceil((config.minFrames ?? 10) * 0.65))) {
     return null
+>>>>>>> origin/main
   }
 
   const xValues = activeFrames.map((frame) => frame.palmCenter.x)
@@ -513,8 +547,13 @@ export function createGestureSequenceRecognizer() {
         }
       }
 
+<<<<<<< HEAD
+      const dtwResult = classifyDTW(history)
+      if (dtwResult && dtwResult.confidence > 0.75) {
+=======
       const dynamicLetterZ = detectDynamicZ(history, zConfig)
       if (dynamicLetterZ) {
+>>>>>>> origin/main
         const historySnapshot = history.slice()
         lastGestureAt = timestamp
         history.length = 0

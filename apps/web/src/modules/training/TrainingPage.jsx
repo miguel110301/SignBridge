@@ -15,6 +15,17 @@ import { requestCameraStream, stopCameraStream } from '../../utils/cameraStream.
 import { requestPracticeFeedback } from '../practice/practiceClient.js'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+<<<<<<< HEAD
+const DYNAMIC_GESTURES = [
+  'hola',
+  'gracias',
+  'dolor',
+  'ayuda',
+  'agua',
+  'sí',
+  'no',
+  'nombre',
+=======
 const DYNAMIC_GESTURES = SIGN_LEXICON_WORDS.map((entry) => entry.word)
 const GEMINI_AUTO_SAVE_SCORE = 85
 const FINGER_TIPS = [
@@ -31,6 +42,7 @@ const HAND_CONNECTIONS = [
   [0, 13], [13, 14], [14, 15], [15, 16],
   [0, 17], [17, 18], [18, 19], [19, 20],
   [5, 9], [9, 13], [13, 17],
+>>>>>>> origin/main
 ]
 
 function formatQualityStatus(status) {
@@ -347,6 +359,15 @@ export default function TrainingPage() {
       
       // Si estamos grabando secuencia dinámica
       if (isRecording) {
+<<<<<<< HEAD
+        // Solo guardamos lo que necesita el clasificador DTW (canonical, palmCenter, faceAnchor).
+        // No se almacenan los landmarks crudos de MediaPipe para evitar valores NaN/Infinity
+        // en la coordenada z que rompen la serialización JSON.
+        recordingBufferRef.current.push({
+          canonical: features.points.map(p => ({ x: p.x, y: p.y, z: p.z ?? 0 })),
+          palmCenter: { x: features.palmCenter.x, y: features.palmCenter.y, z: features.palmCenter.z ?? 0 },
+          faceAnchor: frameMeta.faceAnchor || null,
+=======
         const frameModel = buildFrameHandModel(landmarks, frameMeta)
         recordingBufferRef.current.push({
           landmarks,
@@ -356,6 +377,7 @@ export default function TrainingPage() {
           handCount: frameMeta.handsCount ?? 1,
           secondaryPalmCenter: frameMeta.secondaryPalmCenter ?? null,
           frameModel,
+>>>>>>> origin/main
         })
       }
       
@@ -552,15 +574,22 @@ export default function TrainingPage() {
     // Graba por 2 segundos
     setTimeout(async () => {
       setIsRecording(false)
-      const frames = recordingBufferRef.current
-      if (frames.length > 5) {
+      const rawFrames = recordingBufferRef.current
+      if (rawFrames.length > 5) {
+        // Submuestrear a máximo 20 frames para reducir payload (DTW no necesita más)
+        const MAX_FRAMES = 20
+        const frames = rawFrames.length <= MAX_FRAMES
+          ? rawFrames
+          : Array.from({ length: MAX_FRAMES }, (_, i) =>
+              rawFrames[Math.round(i * (rawFrames.length - 1) / (MAX_FRAMES - 1))]
+            )
         try {
           await saveTemplate(selectedGesture, frames, true)
           setTemplates(getTemplates())
           setMessage(`¡Secuencia guardada en MongoDB para '${selectedGesture}'! (${frames.length} frames)`)
         } catch (error) {
           console.error('[Training] Error guardando secuencia:', error)
-          setMessage('No se pudo guardar la secuencia en MongoDB.')
+          setMessage(`Error al guardar: ${error?.message ?? 'fallo de red o servidor no disponible'}`)
         }
       } else {
         setMessage('Error: no se detectó suficiente movimiento de mano.')
