@@ -25,6 +25,14 @@ import { ThrottlerGuard, ThrottlerModule, minutes } from '@nestjs/throttler';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
+        const isProduction =
+          (configService.get<string>('NODE_ENV') ?? '').toLowerCase() ===
+          'production';
+        const synchronizeEnv = configService.get<string>('DB_SYNCHRONIZE');
+        const synchronize =
+          synchronizeEnv === undefined
+            ? !isProduction
+            : synchronizeEnv.toLowerCase() === 'true';
 
         if (!databaseUrl) {
           throw new Error('DATABASE_URL is not configured');
@@ -34,7 +42,7 @@ import { ThrottlerGuard, ThrottlerModule, minutes } from '@nestjs/throttler';
           type: 'postgres' as const,
           url: databaseUrl,
           autoLoadEntities: true,
-          synchronize: true,
+          synchronize,
           ssl: {
             rejectUnauthorized: false,
           },
