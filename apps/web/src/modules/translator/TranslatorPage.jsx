@@ -12,6 +12,7 @@ import {
 } from '@signbridge/sign-engine'
 import { useHandDetection } from '../../hooks/useHandDetection.js'
 import { requestCameraStream } from '../../utils/cameraStream.js'
+import { useI18n } from '../../i18n/I18nProvider.jsx'
 
 const API_BASE = (import.meta.env.VITE_SERVER_URL ?? '').replace(/\/$/, '')
 
@@ -569,6 +570,7 @@ function drawDebugOverlay(canvas, video, debugFrame, showDebug) {
 
 export default function TranslatorPage() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const streamRef = useRef(null)
   const debugCanvasRef = useRef(null)
   const smootherRef = useRef(createSmoother(8))
@@ -1220,7 +1222,7 @@ export default function TranslatorPage() {
   const liveSubtitle = [...phraseWords, liveWordPreview]
     .filter(Boolean)
     .join(' ')
-  const detectionHeading = currentDetectionType === 'gesture' ? 'Gesto detectado' : 'Letra detectada'
+  const detectionHeading = currentDetectionType === 'gesture' ? t('translator.gesture_detected') : t('translator.letter_detected')
   const gestureDebug = debugSnapshot?.gestureDebug
   const currentGestureFrame = gestureDebug?.currentFrame
   const mobileBottomOffset = isCompactViewport
@@ -1228,22 +1230,23 @@ export default function TranslatorPage() {
     : '1rem'
 
   const statusLabel = detectionError
-    ? 'Error IA'
+    ? t('translator.status_error')
     : !ready
-      ? 'Cargando IA'
+      ? t('translator.status_loading')
       : !isActive
-        ? 'En pausa'
+        ? t('translator.status_paused')
         : cameraReady && handPresent
-          ? 'Detectando'
+          ? t('translator.status_detecting')
           : cameraReady
-            ? 'Esperando mano'
-            : 'Abriendo camara'
+            ? t('translator.status_waiting')
+            : t('translator.status_camera')
 
   return (
-    <section className="relative h-full min-h-[100dvh] overflow-hidden bg-black">
+    <section className="relative h-full min-h-[100dvh] overflow-hidden bg-zinc-950">
+      {/* Camera feed */}
       <video
         ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-500 ${
           cameraReady ? 'opacity-100' : 'opacity-0'
         }`}
         style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
@@ -1253,6 +1256,7 @@ export default function TranslatorPage() {
         disablePictureInPicture
       />
 
+      {/* Debug canvas */}
       <canvas
         ref={debugCanvasRef}
         className={`pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200 ${
@@ -1261,125 +1265,151 @@ export default function TranslatorPage() {
         style={{ transform: shouldMirrorPreview ? 'scaleX(-1)' : 'none' }}
       />
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/10 to-black/85" />
+      {/* Gradient vignette with brand tint */}
+      <div className="absolute inset-0 bg-gradient-to-b from-brand-950/80 via-transparent to-zinc-950/90" />
 
+      {/* Loading state */}
       {isActive && !cameraReady && (
-        <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-gradient-to-br from-zinc-950 via-brand-950/40 to-zinc-950">
           <div className="max-w-sm px-6 text-center">
-            <div className="mx-auto mb-4 h-14 w-14 rounded-full border-2 border-brand-500/60 border-t-transparent animate-spin" />
-            <h1 className="mb-2 text-2xl font-semibold tracking-tight">SignBridge Live</h1>
-            <p className="text-sm text-zinc-300">
-              Abriendo camara trasera y preparando la deteccion en tiempo real.
+            <div className="mx-auto mb-6 h-16 w-16 rounded-2xl border-2 border-brand-400 border-t-transparent animate-spin" />
+            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white">{t('translator.loading_title')}</h1>
+            <p className="text-sm leading-relaxed text-brand-200/70">
+              {t('translator.loading_desc')}
             </p>
           </div>
         </div>
       )}
 
+      {/* Idle state — hero card */}
       {!isActive && (
-        <div className="absolute inset-x-0 top-1/2 z-[5] px-6 -translate-y-1/2">
-          <div className="mx-auto max-w-md rounded-[2rem] border border-white/10 bg-black/45 p-6 text-center backdrop-blur-xl">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 text-2xl text-brand-300">
+        <div className="absolute inset-x-0 top-1/2 z-[5] px-4 -translate-y-1/2 sm:px-6">
+          <div className="mx-auto max-w-sm overflow-hidden rounded-2xl border border-brand-500/30 bg-gradient-to-b from-brand-950/60 to-zinc-900/70 px-5 py-6 text-center shadow-2xl shadow-brand-500/10 backdrop-blur-2xl sm:max-w-md sm:rounded-3xl sm:p-8">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/20 text-2xl ring-1 ring-brand-400/30 sm:mb-5 sm:h-16 sm:w-16 sm:text-3xl">
               🤟
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Listo para traducir</h1>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
-              Toca iniciar, apunta la camara trasera a la persona que esta senando y deja que SignBridge interprete en voz alta.
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('translator.idle_title')}</h1>
+            <p className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-zinc-300 sm:mt-3 sm:text-sm">
+              {t('translator.idle_desc')}
             </p>
+            <button
+              type="button"
+              onClick={toggleTranslation}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-95 touch-manipulation sm:mt-6 sm:px-8 sm:py-3"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
+              {t('translator.start_translation')}
+            </button>
           </div>
         </div>
       )}
 
+      {/* ─── Top detection HUD ─── */}
       <div
-        className="absolute inset-x-0 top-0 z-10 px-4"
+        className="absolute inset-x-0 top-0 z-10 px-3 sm:px-4"
         style={{ paddingTop: `calc(env(safe-area-inset-top, 0px) + ${isCompactViewport ? '0.75rem' : '1rem'})` }}
       >
-        <div className="mx-auto max-w-4xl rounded-[1.25rem] border border-white/10 bg-black/40 p-3 backdrop-blur-xl sm:rounded-[2rem] sm:p-4">
-          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">{detectionHeading}</p>
-              <div className="mt-1 flex items-end gap-3">
-                <span className="text-5xl font-black leading-none text-white sm:text-7xl">
+        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-brand-500/25 bg-gradient-to-r from-brand-950/70 via-zinc-900/60 to-brand-950/70 px-3 py-2.5 shadow-xl shadow-brand-500/5 backdrop-blur-2xl sm:rounded-3xl sm:p-4">
+          {/* Main detection row */}
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-brand-300 sm:text-[10px]">{detectionHeading}</p>
+              <div className="mt-1 flex items-end gap-2 sm:mt-1.5 sm:gap-3">
+                <span className="bg-gradient-to-b from-white to-brand-100 bg-clip-text text-4xl font-black leading-none text-transparent sm:text-7xl">
                   {currentLetter || '—'}
                 </span>
-                <span className="pb-1 text-sm text-zinc-200 sm:pb-2">
+                <span className="mb-0.5 rounded-md bg-white/10 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-zinc-200 sm:mb-2 sm:rounded-lg sm:px-2 sm:text-sm">
                   {Math.round(currentConfidence * 100)}%
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-row flex-wrap items-start gap-2 sm:flex-col sm:items-end sm:text-right">
-              <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-zinc-100">
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${
+                isActive && cameraReady && handPresent
+                  ? 'bg-accent-500/20 text-accent-300 ring-1 ring-accent-400/30'
+                  : isActive
+                    ? 'bg-brand-500/20 text-brand-200 ring-1 ring-brand-400/20'
+                    : 'bg-white/10 text-zinc-300 ring-1 ring-white/10'
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  isActive && cameraReady && handPresent ? 'bg-accent-400 animate-pulse' : isActive ? 'bg-brand-400' : 'bg-zinc-500'
+                }`} />
                 {statusLabel}
               </span>
 
               {cameraReady && (
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-200">
-                  {shouldMirrorPreview ? 'Vista espejo' : 'Vista normal'}
+                <span className="rounded-full bg-white/8 px-2.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                  {shouldMirrorPreview ? t('translator.mirror_view') : t('translator.normal_view')}
                 </span>
               )}
 
               {(audioStatus !== 'idle' || queueSize > 0) && (
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/15 px-2.5 py-0.5 text-[10px] font-medium text-accent-300 ring-1 ring-accent-400/20">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>
                   {audioStatus === 'fetching'
-                    ? 'Preparando audio'
+                    ? t('translator.audio_fetching')
                     : audioStatus === 'playing'
-                      ? 'Reproduciendo'
-                      : 'Audio en cola'}
+                      ? t('translator.audio_playing')
+                      : t('translator.audio_queued')}
                   {queueSize > 0 ? ` · ${queueSize}` : ''}
                 </span>
               )}
             </div>
           </div>
 
-          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          {/* Confidence bar */}
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/8">
             <div
-              className="h-full rounded-full transition-all duration-150"
+              className="h-full rounded-full transition-all duration-200"
               style={{
                 width: `${Math.max(currentConfidence * 100, currentLetter ? 8 : 0)}%`,
                 background:
                   currentConfidence > 0.85
                     ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
                     : currentConfidence > 0.6
-                      ? 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'
+                      ? 'linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%)'
                       : 'linear-gradient(90deg, #fb7185 0%, #ef4444 100%)',
               }}
             />
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-300 sm:text-xs">
-            <span className="rounded-full bg-white/8 px-3 py-1">
-              Letra estable: {requiredStabilityFrames} frames
+          {/* Metadata pills */}
+          <div className="mt-2 flex flex-wrap items-center gap-1 text-[9px] text-zinc-400 sm:mt-2.5 sm:gap-1.5 sm:text-[11px]">
+            <span className="rounded-full bg-white/5 px-2 py-0.5 sm:px-2.5">
+              {t('translator.stable_letter')}: {requiredStabilityFrames}f
             </span>
-            <span className="rounded-full bg-white/8 px-3 py-1">
-              Pausa palabra: {WORD_PAUSE_MS} ms
+            <span className="rounded-full bg-white/5 px-2 py-0.5 sm:px-2.5">
+              {t('translator.word_pause')}: {WORD_PAUSE_MS}ms
             </span>
-            <span className="rounded-full bg-white/8 px-3 py-1">
-              Pausa frase: {PHRASE_PAUSE_MS} ms
+            <span className="hidden rounded-full bg-white/5 px-2.5 py-0.5 sm:inline">
+              {t('translator.phrase_pause')}: {PHRASE_PAUSE_MS}ms
             </span>
-            <span className="rounded-full bg-sky-500/12 px-3 py-1 text-sky-200">
-              Perfil: {SIGN_LANGUAGE_PROFILE.code}
+            <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-brand-300 sm:px-2.5">
+              {SIGN_LANGUAGE_PROFILE.code}
             </span>
-            <span className="rounded-full bg-emerald-500/12 px-3 py-1 text-emerald-200">
-              Deletreo + gestos activos
+            <span className="rounded-full bg-accent-500/10 px-2 py-0.5 text-accent-300 sm:px-2.5">
+              {t('translator.spelling_gestures')}
             </span>
           </div>
         </div>
       </div>
 
+      {/* ─── Debug panels (unchanged logic, brand-tinted borders) ─── */}
       {showDebug && debugSnapshot && (
         isCompactViewport ? (
           <div
-            className="absolute inset-x-3 z-10 max-h-[24dvh] overflow-y-auto rounded-[1.25rem] border border-cyan-400/20 bg-black/65 p-3 backdrop-blur-xl"
+            className="absolute inset-x-3 z-10 max-h-[24dvh] overflow-y-auto rounded-2xl border border-brand-400/20 bg-zinc-900/80 p-3 backdrop-blur-2xl"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 7rem)' }}
           >
-            <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200">Debug Movil</p>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-zinc-200">
-              <span className="rounded-xl bg-white/8 px-3 py-2">Tipo: {debugSnapshot.currentDetectionType}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Calidad: {debugSnapshot.handQuality?.qualityScore?.toFixed(2) ?? '—'}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Caja: {formatQualityStatus(debugSnapshot.handQuality?.status)}</span>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Debug</p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-zinc-300">
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Tipo: {debugSnapshot.currentDetectionType}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Calidad: {debugSnapshot.handQuality?.qualityScore?.toFixed(2) ?? '—'}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Caja: {formatQualityStatus(debugSnapshot.handQuality?.status)}</span>
             </div>
-            <div className="mt-2 space-y-1 rounded-2xl bg-white/8 p-3 font-mono text-[11px] text-zinc-200">
+            <div className="mt-2 space-y-1 rounded-xl bg-white/5 p-2.5 font-mono text-[10px] text-zinc-300">
               <p>mano:{debugSnapshot.handedness}</p>
               <p>stable:{debugSnapshot.staticPose?.stable ? '1' : '0'} usable:{debugSnapshot.handQuality?.reliable ? '1' : '0'}</p>
               <p>move:{debugSnapshot.staticPose?.travel?.toFixed(3) ?? '—'} rx:{debugSnapshot.staticPose?.rangeX?.toFixed(3) ?? '—'} ry:{debugSnapshot.staticPose?.rangeY?.toFixed(3) ?? '—'}</p>
@@ -1396,19 +1426,19 @@ export default function TranslatorPage() {
           </div>
         ) : (
           <div
-            className="absolute left-3 right-3 z-10 max-h-[40dvh] overflow-y-auto rounded-[1.5rem] border border-cyan-400/20 bg-black/55 p-3 backdrop-blur-xl md:left-4 md:right-auto md:w-[min(22rem,calc(100vw-2rem))] md:p-4"
+            className="absolute left-3 right-3 z-10 max-h-[40dvh] overflow-y-auto rounded-2xl border border-brand-400/20 bg-zinc-900/75 p-3 backdrop-blur-2xl md:left-4 md:right-auto md:w-[min(22rem,calc(100vw-2rem))] md:p-4"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 9.25rem)' }}
           >
-            <p className="text-xs uppercase tracking-[0.24em] text-cyan-200">Debug Mapper</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-200">
-              <span className="rounded-xl bg-white/8 px-3 py-2">Tipo: {debugSnapshot.currentDetectionType}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Raw: {debugSnapshot.rawPrediction?.letter ?? '—'}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Smooth: {debugSnapshot.smoothedPrediction?.letter ?? '—'}</span>
-              <span className="rounded-xl bg-white/8 px-3 py-2">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Debug Mapper</p>
+            <div className="mt-3 grid grid-cols-2 gap-1.5 text-[11px] text-zinc-300">
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Tipo: {debugSnapshot.currentDetectionType}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Raw: {debugSnapshot.rawPrediction?.letter ?? '—'}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Smooth: {debugSnapshot.smoothedPrediction?.letter ?? '—'}</span>
+              <span className="rounded-lg bg-white/5 px-2.5 py-1.5">Final: {debugSnapshot.resolvedPrediction?.letter ?? '—'}</span>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">Calidad mano</p>
+            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-zinc-300">
+              <p className="font-semibold text-brand-200">Calidad mano</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>reliable:{debugSnapshot.handQuality?.reliable ? '1' : '0'} status:{debugSnapshot.handQuality?.status ?? '—'} score:{debugSnapshot.handQuality?.qualityScore?.toFixed(3) ?? '—'}</p>
                 <p>edges:{debugSnapshot.handQuality?.edgeTouches ?? '—'} area:{debugSnapshot.handQuality?.area?.toFixed(3) ?? '—'}</p>
@@ -1419,8 +1449,8 @@ export default function TranslatorPage() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">Dedos extendidos</p>
+            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-zinc-300">
+              <p className="font-semibold text-brand-200">Dedos extendidos</p>
               <p className="mt-2 font-mono">
                 T:{debugSnapshot.fingerFlags?.thumb ? '1' : '0'} I:{debugSnapshot.fingerFlags?.index ? '1' : '0'} M:{debugSnapshot.fingerFlags?.middle ? '1' : '0'} R:{debugSnapshot.fingerFlags?.ring ? '1' : '0'} P:{debugSnapshot.fingerFlags?.pinky ? '1' : '0'}
               </p>
@@ -1436,13 +1466,13 @@ export default function TranslatorPage() {
               <p className="mt-2 font-mono">
                 gap_IM:{debugSnapshot.featureState?.gapIM?.toFixed(3) ?? '—'} crossed_IM:{debugSnapshot.featureState?.crossedIM ? '1' : '0'} thumb_role:{debugSnapshot.featureState?.thumbRole ?? '—'} palm:{debugSnapshot.featureState?.palmOrientation ?? '—'}
               </p>
-              <p className="mt-2 font-mono text-amber-200">
+              <p className="mt-2 font-mono text-amber-300">
                 2o fallo:{debugSnapshot.classification?.topCandidates?.[1]?.failedRule ?? '—'}
               </p>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">Ejes / orientacion</p>
+            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-zinc-300">
+              <p className="font-semibold text-brand-200">Ejes / orientacion</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>camDir:{formatDirectionMap(debugSnapshot.directionState?.camera)}</p>
                 <p>locDir:{formatDirectionMap(debugSnapshot.directionState?.local)}</p>
@@ -1451,8 +1481,8 @@ export default function TranslatorPage() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-white/8 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">Gesto hola</p>
+            <div className="mt-3 rounded-xl bg-white/5 p-3 text-[11px] text-zinc-300">
+              <p className="font-semibold text-brand-200">Gesto hola</p>
               <div className="mt-2 space-y-1 font-mono">
                 <p>nearHead:{currentGestureFrame?.nearHead ? '1' : '0'} twoFinger:{currentGestureFrame?.twoFingerHandshape ? '1' : '0'}</p>
                 <p>palmFacing:{currentGestureFrame?.palmFacingCamera ? '1' : '0'} score:{currentGestureFrame?.palmFacingScore?.toFixed(3) ?? '—'}</p>
@@ -1460,7 +1490,7 @@ export default function TranslatorPage() {
                 <p>ratioPalm:{gestureDebug?.palmFacingRatio?.toFixed(2) ?? '—'} ratioOk:{gestureDebug?.reliableRatio?.toFixed(2) ?? '—'}</p>
                 <p>rangeX:{gestureDebug?.recentRangeX?.toFixed(3) ?? '—'} frames:{gestureDebug?.frameCount ?? 0} suppress:{gestureDebug?.suppressStatic ? '1' : '0'}</p>
                 {gestureDebug?.detectionDebug && (
-                  <p className="text-emerald-200">
+                  <p className="text-accent-300">
                     detectado conf:{gestureDebug.detectionDebug?.nearHeadRatio?.toFixed(2) ?? '—'} swing:{gestureDebug.detectionDebug?.maxSwingAmplitude?.toFixed(3) ?? '—'}
                   </p>
                 )}
@@ -1470,130 +1500,144 @@ export default function TranslatorPage() {
         )
       )}
 
+      {/* ─── Bottom subtitle panel ─── */}
       <div
-        className="absolute inset-x-0 bottom-0 z-10 px-4"
+        className="absolute inset-x-0 bottom-0 z-10 px-3 sm:px-4"
         style={{ paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
       >
-        <div className="mx-auto max-w-4xl rounded-[1.25rem] border border-white/10 bg-black/50 p-3 backdrop-blur-xl sm:rounded-[2rem] sm:p-4">
-          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-300">Palabra actual</p>
-              <p className="mt-1 text-base font-semibold tracking-[0.24em] text-white sm:text-lg sm:tracking-[0.28em]">
+        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-brand-500/25 bg-gradient-to-r from-zinc-900/75 via-brand-950/50 to-zinc-900/75 px-3 py-2.5 shadow-xl shadow-brand-500/5 backdrop-blur-2xl sm:rounded-3xl sm:p-4">
+          <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:flex-row sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-brand-300 sm:text-[10px]">{t('translator.current_word')}</p>
+              <p className="mt-0.5 text-base font-bold tracking-[0.2em] text-white sm:mt-1 sm:text-xl sm:tracking-[0.24em]">
                 {formatSpelledWord(wordBuffer)}
               </p>
               {liveDecodedWord?.changed && (
-                <p className="mt-2 text-xs text-emerald-200">
-                  Interpretando "{liveDecodedWord.normalized}" como "{liveDecodedWord.corrected}"
+                <p className="mt-1 text-[11px] text-accent-300">
+                  {t('translator.interpreting_as').replace('{raw}', liveDecodedWord.normalized).replace('{corrected}', liveDecodedWord.corrected)}
                 </p>
               )}
               {lastGestureWord && currentDetectionType === 'gesture' && (
-                <p className="mt-2 text-xs text-sky-200">
-                  Gesto reconocido: "{lastGestureWord}"
+                <p className="mt-1 text-[11px] text-brand-300">
+                  {t('translator.gesture_recognized').replace('{word}', lastGestureWord)}
                 </p>
               )}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-zinc-300 sm:text-right">
-              <p>{handPresent ? 'Mano visible' : 'Sin mano'}</p>
-              <p className="mt-1 text-zinc-400">Se habla automaticamente al cerrar palabra</p>
+            <div className="shrink-0 rounded-lg border border-white/8 bg-white/5 px-2.5 py-1.5 text-right text-[10px] sm:rounded-xl sm:px-3 sm:py-2 sm:text-[11px]">
+              <p className={handPresent ? 'font-medium text-accent-300' : 'text-zinc-400'}>{handPresent ? t('translator.hand_visible') : t('translator.no_hand')}</p>
+              <p className="mt-0.5 hidden text-zinc-500 sm:block">{t('translator.auto_speak')}</p>
             </div>
           </div>
 
-          <div className="space-y-2">
+          {/* Subtitle area */}
+          <div className="space-y-1 border-t border-white/8 pt-2 sm:space-y-1.5 sm:pt-3">
             {recentLines.map((line, index) => (
-              <p key={`${line}-${index}`} className="text-xs text-zinc-400 sm:text-sm">
+              <p key={`${line}-${index}`} className="text-[11px] text-zinc-500 sm:text-sm">
                 {line}
               </p>
             ))}
 
-            <p className="min-h-[2.5rem] text-xl font-semibold leading-tight text-white sm:text-3xl">
-              {liveSubtitle || 'Los subtitulos apareceran aqui en cuanto detectemos la mano.'}
+            <p className="min-h-[2rem] text-lg font-bold leading-snug text-white sm:min-h-[2.5rem] sm:text-2xl md:text-3xl">
+              {liveSubtitle || <span className="text-zinc-500 text-sm sm:text-base">{t('translator.subtitle_placeholder')}</span>}
             </p>
 
             {lastDecodedWord?.changed && (
-              <p className="text-xs text-emerald-200">
-                Ultima correccion: "{lastDecodedWord.normalized}" {'->'} "{lastDecodedWord.corrected}"
+              <p className="text-xs text-accent-300">
+                {t('translator.last_correction')}: &ldquo;{lastDecodedWord.normalized}&rdquo; {'→'} &ldquo;{lastDecodedWord.corrected}&rdquo;
               </p>
             )}
           </div>
 
+          {/* Errors */}
           {(cameraError || detectionError || ttsError) && (
-            <div className="mt-4 space-y-2 text-sm">
+            <div className="mt-3 space-y-1.5 text-sm">
               {cameraError && (
-                <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
+                <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
                   {cameraError}
                 </p>
               )}
               {detectionError && (
-                <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
-                  Error del modelo: {detectionError}
+                <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                  {t('translator.model_error')}: {detectionError}
                 </p>
               )}
               {ttsError && (
-                <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-100">
-                  Audio: {ttsError}
+                <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  {t('translator.audio_label')}: {ttsError}
                 </p>
               )}
             </div>
           )}
 
+          {/* Mobile controls */}
           {isCompactViewport && (
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setShowDebug((prev) => !prev)}
-                className="rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-lg transition active:scale-95 touch-manipulation"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold text-zinc-300 transition active:scale-95 touch-manipulation"
               >
-                {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+                {showDebug ? t('translator.hide_debug') : t('translator.show_debug')}
               </button>
 
               <button
                 type="button"
                 onClick={toggleTranslation}
-                className={`rounded-full px-4 py-3 text-sm font-semibold shadow-lg transition active:scale-95 touch-manipulation ${
-                  isActive ? 'bg-red-500 text-white' : 'bg-brand-500 text-white'
+                className={`rounded-xl px-3 py-2.5 text-xs font-semibold shadow-lg transition active:scale-95 touch-manipulation ${
+                  isActive
+                    ? 'bg-red-500/90 text-white'
+                    : 'bg-brand-500 text-white shadow-brand-500/25'
                 }`}
               >
-                {isActive ? 'Pausar traduccion' : 'Iniciar traduccion'}
+                {isActive ? t('translator.pause') : t('translator.start')}
               </button>
             </div>
           )}
         </div>
       </div>
 
+      {/* ─── Desktop floating controls ─── */}
       {!isCompactViewport && (
         <>
           <button
             type="button"
             onClick={toggleTranslation}
-            className={`absolute right-3 z-20 rounded-full px-4 py-3 text-sm font-semibold shadow-2xl transition active:scale-95 touch-manipulation sm:right-4 sm:px-5 sm:py-4 ${
+            className={`absolute right-3 z-20 flex items-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold shadow-2xl transition active:scale-95 touch-manipulation sm:right-4 ${
               isActive
-                ? 'bg-red-500 text-white'
-                : 'bg-brand-500 text-white'
+                ? 'bg-red-500/90 text-white shadow-red-500/20'
+                : 'bg-brand-500 text-white shadow-brand-500/30 hover:bg-brand-600'
             }`}
             style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
           >
-            {isActive ? 'Pausar traduccion' : 'Iniciar traduccion'}
+            {isActive ? (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
+            )}
+            {isActive ? t('translator.pause_translation') : t('translator.start_translation')}
           </button>
 
           <button
             type="button"
             onClick={() => setShowDebug((prev) => !prev)}
-            className="absolute left-3 z-20 rounded-full border border-cyan-400/30 bg-black/60 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-2xl transition active:scale-95 touch-manipulation sm:left-4 sm:px-5 sm:py-4"
+            className="absolute left-3 z-20 rounded-2xl border border-white/10 bg-zinc-900/80 px-4 py-3 text-sm font-semibold text-zinc-300 shadow-xl backdrop-blur-xl transition hover:bg-zinc-800/80 active:scale-95 touch-manipulation sm:left-4"
             style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${mobileBottomOffset})` }}
           >
-            {showDebug ? 'Ocultar debug' : 'Mostrar debug'}
+            {showDebug ? t('translator.hide_debug') : t('translator.show_debug')}
           </button>
         </>
       )}
 
+      {/* Exit button */}
       <button
         type="button"
         onClick={() => navigate('/')}
-        className="absolute right-3 top-3 z-20 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white shadow-xl backdrop-blur-md transition active:scale-95 touch-manipulation sm:right-4 sm:top-4"
+        className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-xl border border-white/10 bg-zinc-900/80 px-3.5 py-2 text-sm font-medium text-zinc-300 shadow-xl backdrop-blur-xl transition hover:bg-zinc-800/80 active:scale-95 touch-manipulation sm:right-4 sm:top-4"
         style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
       >
-        Salir
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+        {t('translator.exit')}
       </button>
     </section>
   )
