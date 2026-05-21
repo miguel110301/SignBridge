@@ -37,12 +37,23 @@ const app  = express()
 const PORT = process.env.PORT || 3001
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://localhost:3001',
+  ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
+])
+
 app.use(cors({
-  origin: [
-    'http://localhost:5173',      // Vite dev
-    'https://signbridge.vercel.app', // Producción (actualizar con tu dominio)
-  ],
-  credentials: true
+  origin(origin, callback) {
+    // Sin origin = petición directa (Postman, curl, mismo servidor)
+    if (!origin) return callback(null, true)
+    // Cualquier subdominio de vercel.app (preview deployments incluidos)
+    if (origin.endsWith('.vercel.app') || ALLOWED_ORIGINS.has(origin)) {
+      return callback(null, true)
+    }
+    callback(new Error(`CORS bloqueado para: ${origin}`))
+  },
+  credentials: true,
 }))
 app.use(express.json({ limit: '5mb' }))   // imágenes en base64 para Gemini
 
@@ -80,8 +91,13 @@ if (existsSync(webDistDir)) {
   })
 }
 
-app.listen(PORT, () => {
-  console.log(`\n🟢 SignBridge server corriendo en http://localhost:${PORT}`)
-  console.log(`   ElevenLabs key: ${process.env.ELEVENLABS_API_KEY ? '✓ configurada' : '✗ FALTA'}`)
-  console.log(`   Gemini key:     ${process.env.GEMINI_API_KEY     ? '✓ configurada' : '✗ FALTA'}\n`)
-})
+// En Vercel el runtime llama directamente al handler; no se necesita listen()
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n🟢 SignBridge server corriendo en http://localhost:${PORT}`)
+    console.log(`   ElevenLabs key: ${process.env.ELEVENLABS_API_KEY ? '✓ configurada' : '✗ FALTA'}`)
+    console.log(`   Gemini key:     ${process.env.GEMINI_API_KEY     ? '✓ configurada' : '✗ FALTA'}\n`)
+  })
+}
+
+export default app
